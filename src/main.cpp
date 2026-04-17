@@ -6,6 +6,8 @@
 #include <csignal>
 #include <thread>
 
+#include "preprocess.hpp"
+
 void draw_x(cv::Mat& img) {
     int cx = img.cols / 2;
     int cy = img.rows / 2;

@@ -1,9 +1,12 @@
+#include "preprocess.hpp"
+
 #include <opencv2/opencv.hpp>
+#include <algorithm>
+#include <cstring>
 #include <vector>
 #include <stdexcept>
-#include <preprocess.hpp>
 
-PreprocessResult preprocessYOLO(const cv::Mat& image, int input_w = 1280, int input_h = 1280) {
+PreprocessResult preprocessYOLO(const cv::Mat& image, int input_w, int input_h) {
     if (image.empty()) {
         throw std::runtime_error("Input image is empty");
     }
