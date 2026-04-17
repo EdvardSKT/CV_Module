@@ -54,7 +54,7 @@ void capture_loop(SharedFrame& sharedFrame, std::atomic<bool>& running)
 void inference_loop(SharedFrame& sharedFrame, std::atomic<bool>& running, cv::Mat& display_frame) {
     uint64_t prevFrameId{0};
 
-    cv::dnn::Net net = cv::dnn::readNetFromONNX("weights.onnx");
+    cv::dnn::Net net = cv::dnn::readNetFromONNX("models/weights.onnx");
     net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
     net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
 
