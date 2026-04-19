@@ -9,7 +9,7 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui videoio dnn)
 
 add_executable(cv_module
     src/main.cpp
-    src/preprocess.cpp
+    src/image_processing.cpp
     src/capture_thread.cpp
     src/inference_thread.cpp
 )
