@@ -12,6 +12,7 @@ add_executable(cv_module
     src/image_processing.cpp
     src/capture_thread.cpp
     src/inference_thread.cpp
+    src/queue_thread.cpp
 )
 
 target_include_directories(cv_module PRIVATE include)

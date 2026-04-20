@@ -78,36 +78,3 @@ void queue_loop(std::atomic<bool>& running, BoundedChannel<std::vector<Detection
     }
 
 };
-
-
-int main() {
-
-    const char* port = "/dev/cu.usbserial-210";
-
-    int fd = open(port, O_RDWR | O_NOCTTY | O_SYNC);
-    if (fd < 0) {
-        perror("open");
-        return 1;
-    }
-
-    // Configure serial
-    struct termios tty{};
-    tcgetattr(fd, &tty);
-
-    cfsetospeed(&tty, B115200);
-    cfsetispeed(&tty, B115200);
-
-    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;
-    tty.c_cflag |= (CLOCAL | CREAD);
-    tty.c_cflag &= ~(PARENB | PARODD);
-    tty.c_cflag &= ~CSTOPB;
-    tty.c_cflag &= ~CRTSCTS;
-
-    tty.c_iflag = 0;
-    tty.c_oflag = 0;
-    tty.c_lflag = 0;
-
-    tcsetattr(fd, TCSANOW, &tty);
-
-    return 0;
-}
