@@ -1,6 +1,7 @@
 #include "image_processing.hpp"
 #include "BoundedChannel.hpp"
 #include "queue_thread.hpp"
+#include "coordinate_converter.hpp"
 
 #include <string>
 #include <vector>
@@ -47,9 +48,9 @@ std::vector<DetectionCenter> find_new_detections(std::vector<DetectionCenter> in
     return new_detections;
 };
 
-float find_pulse_delay_ms(DetectionCenter detection){
-    float current_x = detection.center.x;
-    return (HOME_X_POSITION - current_x)/CONVEYOR_SPEED * 1000;
+float find_pulse_delay_ms(double along_track_position){
+    float stamp = 0; // TODO: add stamp to coordinates
+    return (HOME_X_POSITION - along_track_position)/CONVEYOR_SPEED * 1000 - stamp;
 };
 
 }
@@ -69,12 +70,13 @@ void queue_loop(std::atomic<bool>& running, BoundedChannel<std::vector<Detection
         auto new_detections = find_new_detections(incoming_detections, existing_detections);
 
         for(auto det : new_detections){
-            float delay_ms = find_pulse_delay_ms(det);
+            RobotCoordinate coordinate = convert(det);
+
+            float delay_ms = find_pulse_delay_ms(coordinate.x);
             std::string msg = std::to_string(delay_ms) + "\n";
 
             write(fd, msg.c_str(), msg.size());
         }
-
     }
 
 };
