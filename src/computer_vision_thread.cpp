@@ -1,4 +1,5 @@
 #include "image_processing.hpp"
+#include "BoundedChannel.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -70,7 +71,7 @@ float find_pulse_delay_ms(double along_track_position){
 
 }  // namespace
 
-void cv_loop(std::atomic<bool>& running){
+void cv_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch){
 
     // Open camera feed
     cv::VideoCapture camera_feed(0);
@@ -101,6 +102,9 @@ void cv_loop(std::atomic<bool>& running){
 
     cv::Mat frame;
     while (running && camera_feed.read(frame)) {
+
+        // Time of image
+        auto timestamp = std::chrono::steady_clock::now();
         
         // Preprocess image
         PreprocessResult prep;
@@ -128,6 +132,8 @@ void cv_loop(std::atomic<bool>& running){
         // Extract detections
         const auto current_detections = postprocess_detection_centers(out, prep, frame.size());
 
-        // 
+        // Send detections on channel 
+        std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point> msg{current_detections, timestamp};
+        ch.send(msg);
     }
 }

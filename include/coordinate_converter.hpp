@@ -24,3 +24,5 @@ RobotCoordinate convert(const cv::Point2d& detection_pixel, const ConverterConfi
 
 RobotCoordinate convert(const DetectionCenter& detection, const ConverterConfig& config = {});
 
+std::vector<RobotCoordinate> convert_multiple(const std::vector<DetectionCenter>& detections, const ConverterConfig& config = {});
+

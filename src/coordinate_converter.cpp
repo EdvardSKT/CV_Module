@@ -1,6 +1,7 @@
 #include "coordinate_converter.hpp"
 
 #include <array>
+#include <vector>
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
@@ -59,4 +60,16 @@ RobotCoordinate convert(const DetectionCenter& detection, const ConverterConfig&
         },
         config
     );
+}
+
+std::vector<RobotCoordinate> convert_multiple(const std::vector<DetectionCenter>& detections, const ConverterConfig& config)
+{
+    std::vector<RobotCoordinate> converted;
+    converted.reserve(detections.size());
+
+    for(auto det : detections){
+        converted.push_back(convert(det));
+    }
+
+    return converted;
 }
