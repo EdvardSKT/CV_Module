@@ -1,0 +1,4 @@
+float delay_ms = find_pulse_delay_ms(det.x);
+            std::string msg = std::to_string(delay_ms) + "\n";
+
+            write(fd, msg.c_str(), msg.size());

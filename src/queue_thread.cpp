@@ -7,6 +7,7 @@
 #include <vector>
 #include <cmath>
 #include <atomic>
+#include <algorithm>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -29,63 +30,28 @@ const int NEEDED_DETECTIONS_FOR_CONFIRMATION = 3;
 
 struct BatteryTrack {
     RobotCoordinate coordinate;
-    std::chrono::steady_clock::time_point timestamp;
+    std::chrono::steady_clock::time_point last_seen_timestamp;
     int match_counter = 0;
     bool confirmed = false;
+    bool notified = false;
 };
 
-std::vector<RobotCoordinate> find_new_detections(const std::vector<RobotCoordinate> incoming_detections, const std::vector<RobotCoordinate> existing_detections){
+void update_existing_detections(const std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point>& incoming_detections, std::vector<BatteryTrack>& existing_detections, std::chrono::steady_clock::time_point& tracks_timestamp){
+    auto detection_timestamp = incoming_detections.second;
 
-    std::vector<RobotCoordinate> new_detections;
-
-    for(auto new_det : incoming_detections){
-        for(auto old_det : existing_detections){
-
-            double traveled_time = 1; // TODO: IMPLEMENT TIME FOR EACH FRAME AND USE IT HERE 
-            double predicted_x = old_det.x + CONVEYOR_SPEED*traveled_time;
-
-            double distance_from_predicted_x = (new_det.x - predicted_x);
-            double distance_y = (new_det.y - old_det.y);
-
-            if(std::fabs(distance_y) <= Y_DISTANCE_THRESHOLD && std::fabs(distance_from_predicted_x) <= X_TRAVEL_UNCERTAINTY){
-                new_detections.push_back(new_det);
-                break;
-            }
-        }
-    }
-
-    return new_detections;
-};
-
-std::vector<BatteryTrack> update_existing_detections(const std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point>& incoming_detections, std::vector<BatteryTrack> existing_detections){
-    auto timestamp = incoming_detections.second;
-    
-    if(existing_detections.size() == 0){
-        for(const auto& det : incoming_detections.first){
-            existing_detections.push_back(BatteryTrack{det, timestamp});
-        }
-        return existing_detections;
-    }
-
-    existing_detections.erase(
-        std::remove_if(existing_detections.begin(), existing_detections.end(),
-            [](const BatteryTrack& t) {
-                return t.coordinate.x > END_X_POSITION;
-            }),
-        existing_detections.end()
-    );
-    
-    std::vector<bool> used(existing_detections.size(), false);
+    size_t num_existing = existing_detections.size();    
+    std::vector<bool> used(num_existing, false);
     
     for(const auto& inc_det : incoming_detections.first){
-        for(size_t i = 0; i < existing_detections.size(); i++){
+        bool add_track = true;
+        for(size_t i = 0; i < num_existing; i++){
             if(used.at(i)){
                 continue;
             }
 
             BatteryTrack& exi_det = existing_detections.at(i);
 
-            std::chrono::duration<double> traveled_time = timestamp - exi_det.timestamp;
+            std::chrono::duration<double> traveled_time = detection_timestamp - tracks_timestamp;
             double traveled_time_seconds = traveled_time.count();
 
             double predicted_x = exi_det.coordinate.x + CONVEYOR_SPEED*traveled_time_seconds;
@@ -97,7 +63,7 @@ std::vector<BatteryTrack> update_existing_detections(const std::pair<std::vector
                 used.at(i) = true;
 
                 exi_det.coordinate = inc_det;
-                exi_det.timestamp = timestamp;
+                exi_det.last_seen_timestamp = detection_timestamp;
 
                 exi_det.match_counter++;
 
@@ -105,23 +71,46 @@ std::vector<BatteryTrack> update_existing_detections(const std::pair<std::vector
                     exi_det.confirmed = true;
                 }
 
+                add_track = false;
                 break;
             }
         }
-    }
-    return existing_detections;
-}
 
-float find_pulse_delay_ms(double along_track_position){
-    float stamp = 0; // TODO: add stamp to coordinates
-    return (HOME_X_POSITION - along_track_position)/CONVEYOR_SPEED * 1000 - stamp;
-};
+        if(!add_track){
+            continue;
+        }
+        
+        existing_detections.push_back(BatteryTrack{inc_det, detection_timestamp});
+    }
+
+    for(size_t i = 0; i < num_existing; i++){
+        if(!used.at(i)){
+            auto& track = existing_detections.at(i);
+
+            double dt = std::chrono::duration<double>(detection_timestamp - tracks_timestamp).count();
+            track.coordinate.x += dt*CONVEYOR_SPEED;
+        }
+    }
+
+    tracks_timestamp = detection_timestamp;
+
+    existing_detections.erase(
+        std::remove_if(existing_detections.begin(), existing_detections.end(),
+            [](const BatteryTrack& t) {
+                return t.coordinate.x > END_X_POSITION;
+            }),
+        existing_detections.end()
+    );
+
+    return;
+}
 
 }
 
 void queue_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch, int& fd)
 {
     std::vector<BatteryTrack> existing_detections;
+    std::chrono::steady_clock::time_point tracks_timestamp;
 
     while (running) {
         auto incoming = ch.recv();
@@ -132,9 +121,19 @@ void queue_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector
         std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point> incoming_detections_camera_frame = std::move(incoming.value());
         std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point> incoming_detections = {convert_multiple(incoming_detections_camera_frame.first), incoming_detections_camera_frame.second};
 
-        existing_detections = update_existing_detections(incoming_detections, existing_detections);
+        update_existing_detections(incoming_detections, existing_detections, tracks_timestamp);
 
-        
+        std::chrono::duration<double> dt = std::chrono::steady_clock::now() - tracks_timestamp;
+        double dt_seconds = dt.count();
+
+        for(auto& det : existing_detections) {
+            if(det.confirmed && !det.notified){
+                double time_until_home_ms = ((HOME_X_POSITION - det.coordinate.x)/CONVEYOR_SPEED - dt_seconds)*1000;
+                std::string msg = std::to_string(time_until_home_ms) + "\n";
+
+                write(fd, msg.c_str(), msg.size());
+                det.notified = true;
+            }
+        }
     }
-
 };
