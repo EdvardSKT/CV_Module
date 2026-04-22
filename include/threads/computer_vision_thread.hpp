@@ -12,3 +12,8 @@ void cv_loop(
     std::atomic<bool>& running,
     BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch
 );
+
+void mock_cv_loop(
+    std::atomic<bool>& running,
+    BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch
+);

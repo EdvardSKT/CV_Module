@@ -56,3 +56,10 @@ compile_commands.json
 CTestTestfile.cmake
 Makefile
 install_manifest.txt
+
+# Python
+*.pyc
+test_serial.py
+
+# Codex
+*.codex

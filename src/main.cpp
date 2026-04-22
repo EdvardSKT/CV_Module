@@ -1,6 +1,7 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <cstring>
 #include <fcntl.h>
 #include <iostream>
 #include <termios.h>
@@ -25,8 +26,15 @@ void signal_handler(int) {
 
 }  // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
     BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>> ch(10);
+
+    bool use_mock_detector = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--mock-detector") == 0) {
+            use_mock_detector = true;
+        }
+    }
 
     std::signal(SIGINT, signal_handler);
 
@@ -55,10 +63,25 @@ int main() {
     tty.c_iflag = 0;
     tty.c_oflag = 0;
     tty.c_lflag = 0;
+    tty.c_cc[VMIN] = 0;
+    tty.c_cc[VTIME] = 5;
 
-    tcsetattr(fd, TCSANOW, &tty);
+    if (tcsetattr(fd, TCSANOW, &tty) != 0) {
+        perror("tcsetattr");
+        close(fd);
+        return 1;
+    }
 
-    std::thread computer_vision_thread(cv_loop, std::ref(running), std::ref(ch));
+    tcflush(fd, TCIOFLUSH);
+    std::cout << "Opened serial port " << port << " at 115200 baud\n";
+    std::cout << "Waiting for controller serial boot/reset...\n";
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    std::thread computer_vision_thread(
+        use_mock_detector ? mock_cv_loop : cv_loop,
+        std::ref(running),
+        std::ref(ch)
+    );
     std::thread queue_thread(queue_loop, std::ref(running), std::ref(ch), std::ref(fd));
 
     while (running) {
