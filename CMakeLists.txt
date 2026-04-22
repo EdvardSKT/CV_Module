@@ -10,6 +10,7 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui videoio dnn calib3d
 add_executable(cv_module
     src/main.cpp
     src/threads/computer_vision_thread.cpp
+    src/threads/mock_computer_vision_thread.cpp
     src/threads/queue_thread.cpp
     src/threads/robot_thread.cpp
     src/utilities/coordinate_converter.cpp

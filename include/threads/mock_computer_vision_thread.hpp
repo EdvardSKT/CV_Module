@@ -8,7 +8,7 @@
 #include "utilities/BoundedChannel.hpp"
 #include "utilities/image_processing.hpp"
 
-void cv_loop(
+void mock_cv_loop(
     std::atomic<bool>& running,
     BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch
 );
