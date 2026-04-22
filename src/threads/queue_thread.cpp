@@ -1,7 +1,8 @@
-#include "image_processing.hpp"
-#include "BoundedChannel.hpp"
-#include "queue_thread.hpp"
-#include "coordinate_converter.hpp"
+#include "threads/queue_thread.hpp"
+
+#include "utilities/BoundedChannel.hpp"
+#include "utilities/coordinate_converter.hpp"
+#include "utilities/image_processing.hpp"
 
 #include <string>
 #include <vector>
@@ -83,11 +84,11 @@ void update_existing_detections(const std::pair<std::vector<RobotCoordinate>, st
         existing_detections.push_back(BatteryTrack{inc_det, detection_timestamp});
     }
 
+    double dt = std::chrono::duration<double>(detection_timestamp - tracks_timestamp).count();
+
     for(size_t i = 0; i < num_existing; i++){
         if(!used.at(i)){
             auto& track = existing_detections.at(i);
-
-            double dt = std::chrono::duration<double>(detection_timestamp - tracks_timestamp).count();
             track.coordinate.x += dt*CONVEYOR_SPEED;
         }
     }
@@ -129,6 +130,11 @@ void queue_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector
         for(auto& det : existing_detections) {
             if(det.confirmed && !det.notified){
                 double time_until_home_ms = ((HOME_X_POSITION - det.coordinate.x)/CONVEYOR_SPEED - dt_seconds)*1000;
+
+                if(time_until_home_ms < 0){
+                    continue;
+                }
+
                 std::string msg = std::to_string(time_until_home_ms) + "\n";
 
                 write(fd, msg.c_str(), msg.size());

@@ -1,6 +1,8 @@
-#include "YMConnect.h"
-#include "image_processing.hpp"
-#include "BoundedChannel.hpp"
+#include "threads/robot_thread.hpp"
+
+#include "utilities/BoundedChannel.hpp"
+#include "utilities/image_processing.hpp"
+#include "vendor/YMConnect.h"
 
 #include <atomic>
 #include <iostream>

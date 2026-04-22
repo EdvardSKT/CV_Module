@@ -1,22 +1,18 @@
-#include <opencv2/highgui.hpp>
-#include <opencv2/opencv.hpp>
-
 #include <atomic>
 #include <chrono>
 #include <csignal>
-#include <mutex>
-#include <thread>
 #include <fcntl.h>
-#include <unistd.h>
-#include <termios.h>
 #include <iostream>
-#include <string>
+#include <termios.h>
+#include <thread>
+#include <unistd.h>
+#include <utility>
+#include <vector>
 
-#include "capture_thread.hpp"
-#include "inference_thread.hpp"
-#include "queue_thread.hpp"
-#include "shared_types.hpp"
-#include "BoundedChannel.hpp"
+#include "threads/computer_vision_thread.hpp"
+#include "threads/queue_thread.hpp"
+#include "utilities/BoundedChannel.hpp"
+#include "utilities/image_processing.hpp"
 
 
 namespace {
@@ -30,10 +26,7 @@ void signal_handler(int) {
 }  // namespace
 
 int main() {
-    SharedFrame camera_frame;
-    SharedFrame display_frame;
-
-    BoundedChannel<std::vector<DetectionCenter>> ch(10);
+    BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>> ch(10);
 
     std::signal(SIGINT, signal_handler);
 
@@ -65,33 +58,17 @@ int main() {
 
     tcsetattr(fd, TCSANOW, &tty);
 
-    // Start worker threads
-
-    std::thread camera_thread(capture_loop, std::ref(camera_frame), std::ref(running));
-    std::thread inference_thread(inference_loop, std::ref(camera_frame), std::ref(display_frame), std::ref(running));
+    std::thread computer_vision_thread(cv_loop, std::ref(running), std::ref(ch));
     std::thread queue_thread(queue_loop, std::ref(running), std::ref(ch), std::ref(fd));
 
     while (running) {
-        cv::Mat frame_to_show;
-        {
-            std::lock_guard<std::mutex> lock(display_frame.mutex);
-            if (!display_frame.frame.empty()) {
-                frame_to_show = display_frame.frame.clone();
-            }
-        }
-
-        if (frame_to_show.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            continue;
-        }
-
-        cv::imshow("output", frame_to_show);
-        if (cv::waitKey(25) == 27) {
-            running = false;
-        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
     }
 
-    camera_thread.join();
-    inference_thread.join();
+    ch.close();
+    computer_vision_thread.join();
+    queue_thread.join();
+    close(fd);
+
     return 0;
 }

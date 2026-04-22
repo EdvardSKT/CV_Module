@@ -1,4 +1,4 @@
-#include "image_processing.hpp"
+#include "utilities/image_processing.hpp"
 
 #include <opencv2/dnn.hpp>
 #include <opencv2/opencv.hpp>

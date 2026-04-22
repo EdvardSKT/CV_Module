@@ -1,11 +1,14 @@
-#include "image_processing.hpp"
-#include "BoundedChannel.hpp"
+#include "threads/computer_vision_thread.hpp"
 
+#include "utilities/BoundedChannel.hpp"
+#include "utilities/image_processing.hpp"
+
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
-#include <atomic>
-#include <iostream>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include <opencv2/dnn.hpp>
@@ -32,42 +35,6 @@ std::filesystem::path resolve_model_path() {
 
     throw std::runtime_error("Could not find models/best.onnx from the current directory or project source directory");
 }
-
-// DETECTION QUEUE RELATED CONSTANTS AND HELPER FUNCTIONS
-
-const float CONVEYOR_SPEED = 0.3;
-const float Y_DISTANCE_THRESHOLD = 0.001; // TODO: FIND REALISTIC VALUE
-const float X_TRAVEL_UNCERTAINTY = 0.001; // TODO: FIND REALISTIC VALUE
-const float HOME_X_POSITION = 0.5;
-
-
-std::vector<DetectionCenter> find_new_detections(std::vector<DetectionCenter> incoming_detections, std::vector<DetectionCenter> existing_detections){
-
-    std::vector<DetectionCenter> new_detections;
-
-    for(auto new_det : incoming_detections){
-        for(auto old_det : existing_detections){
-
-            double traveled_time = 1; // TODO: IMPLEMENT TIME FOR EACH FRAME AND USE IT HERE 
-            double predicted_x = old_det.center.x + CONVEYOR_SPEED*traveled_time;
-
-            double distance_from_predicted_x = (new_det.center.x - predicted_x);
-            double distance_y = (new_det.center.y - old_det.center.y);
-
-            if(std::fabs(distance_y) <= Y_DISTANCE_THRESHOLD && std::fabs(distance_from_predicted_x) <= X_TRAVEL_UNCERTAINTY){
-                new_detections.push_back(new_det);
-                break;
-            }
-        }
-    }
-
-    return new_detections;
-};
-
-float find_pulse_delay_ms(double along_track_position){
-    float stamp = 0; // TODO: add stamp to coordinates
-    return (HOME_X_POSITION - along_track_position)/CONVEYOR_SPEED * 1000 - stamp;
-};
 
 }  // namespace
 
@@ -96,9 +63,6 @@ void cv_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector<De
 
     net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
     net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-
-    // Create variable for registered detections
-    std::vector<DetectionCenter> registered_detections{};
 
     cv::Mat frame;
     while (running && camera_feed.read(frame)) {
@@ -133,7 +97,8 @@ void cv_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector<De
         const auto current_detections = postprocess_detection_centers(out, prep, frame.size());
 
         // Send detections on channel 
-        std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point> msg{current_detections, timestamp};
-        ch.send(msg);
+        if (!ch.send(std::make_pair(current_detections, timestamp))) {
+            break;
+        }
     }
 }

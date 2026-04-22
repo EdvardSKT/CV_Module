@@ -4,7 +4,7 @@
 
 #include <opencv2/core/types.hpp>
 
-#include "image_processing.hpp"
+#include "utilities/image_processing.hpp"
 
 struct RobotCoordinate {
     double x;
@@ -25,4 +25,3 @@ RobotCoordinate convert(const cv::Point2d& detection_pixel, const ConverterConfi
 RobotCoordinate convert(const DetectionCenter& detection, const ConverterConfig& config = {});
 
 std::vector<RobotCoordinate> convert_multiple(const std::vector<DetectionCenter>& detections, const ConverterConfig& config = {});
-
