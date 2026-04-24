@@ -1,4 +1,5 @@
 #include "threads/robot_thread.hpp"
+#include "threads/queue_thread.hpp"
 
 #include "utilities/BoundedChannel.hpp"
 #include "utilities/image_processing.hpp"
@@ -6,16 +7,47 @@
 
 #include <atomic>
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 namespace {
 
 const UINT32 CONVEYOR_USER_COORDINATE_NUMBER = 1;
 const UINT16 BATTERY_OFFSET_VARIABLE_NUMBER = 0;
 
+const UINT32 PICK_FINISHED_ADDRESS = 10010; // TODO: Define real address
+const UINT32 READY_FOR_OFFSET_ADDRESS = 10011; // TODO: Define real address
+
+RobotPositionVariableData generate_robot_position_variable(const BatteryTrack& active_target)
+{
+    DOUBLE64 crossTrack_offset = active_target.coordinate.y;
+
+    RobotPositionVariableData robotPositionVariableData{};
+    CoordinateArray battery_offset{};
+
+    battery_offset.at(AxisIndex::CartesianAxis::X) = 0;
+    battery_offset.at(AxisIndex::CartesianAxis::Y) = crossTrack_offset;
+    battery_offset.at(AxisIndex::CartesianAxis::Z) = 0;
+    battery_offset.at(AxisIndex::CartesianAxis::Rx) = 0;
+    battery_offset.at(AxisIndex::CartesianAxis::Ry) = 0;
+    battery_offset.at(AxisIndex::CartesianAxis::Rz) = 0;
+
+    robotPositionVariableData.variableIndex = BATTERY_OFFSET_VARIABLE_NUMBER;
+    robotPositionVariableData.positionData.coordinateType = CoordinateType::UserCoordinate;
+    robotPositionVariableData.positionData.userCoordinateNumber = CONVEYOR_USER_COORDINATE_NUMBER;
+    robotPositionVariableData.positionData.axisData = battery_offset;
+
+    return robotPositionVariableData;
 }
 
-void robot_loop(BoundedChannel<DetectionCenter>& active_target_ch, std::atomic<bool>& running) {
+}
+
+
+
+void robot_loop(BoundedChannel<BatteryTrack>& active_target_ch, std::atomic<bool>& running) {
     StatusInfo status{};
+    bool ready_for_offset{false};
+    bool pick_finished{false};
     auto c = YMConnect::OpenConnection("192.168.1.31", status);
 
     while (running) {
@@ -25,27 +57,24 @@ void robot_loop(BoundedChannel<DetectionCenter>& active_target_ch, std::atomic<b
             break;
         }
 
-        DetectionCenter active_target = *incoming;
-        DOUBLE64 crossTrack_offset = active_target.center.y;
+        BatteryTrack active_target = *incoming;
+        RobotPositionVariableData battery_offset = generate_robot_position_variable(active_target);
 
-        RobotPositionVariableData robotPositionVariableData{};
-        CoordinateArray battery_offset{};
+        while(!ready_for_offset){
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            status = c->Io->ReadBit(READY_FOR_OFFSET_ADDRESS, ready_for_offset);
+        }
+        ready_for_offset = false;
 
-        battery_offset.at(AxisIndex::CartesianAxis::X) = 0;
-        battery_offset.at(AxisIndex::CartesianAxis::Y) = crossTrack_offset;
-        battery_offset.at(AxisIndex::CartesianAxis::Z) = 0;
-        battery_offset.at(AxisIndex::CartesianAxis::Rx) = 0;
-        battery_offset.at(AxisIndex::CartesianAxis::Ry) = 0;
-        battery_offset.at(AxisIndex::CartesianAxis::Rz) = 0;
-
-        robotPositionVariableData.variableIndex = BATTERY_OFFSET_VARIABLE_NUMBER;
-        robotPositionVariableData.positionData.coordinateType = CoordinateType::UserCoordinate;
-        robotPositionVariableData.positionData.userCoordinateNumber = CONVEYOR_USER_COORDINATE_NUMBER;
-        robotPositionVariableData.positionData.axisData = battery_offset;
-
-        status = c->Variables->RobotPositionVariable->Write(robotPositionVariableData);
+        status = c->Variables->RobotPositionVariable->Write(battery_offset);
 
         std::cout << status << std::endl;
+
+        while(!pick_finished){
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            status = c->Io->ReadBit(PICK_FINISHED_ADDRESS, pick_finished);
+        }
+        pick_finished = false;
     }
 
     YMConnect::CloseConnection(c);

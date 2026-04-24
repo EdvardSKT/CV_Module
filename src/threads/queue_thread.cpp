@@ -32,14 +32,6 @@ const float END_X_POSITION = 3.5;
 const int NEEDED_DETECTIONS_FOR_CONFIRMATION = 3;
 const bool LOG_TRACKING = true;
 
-struct BatteryTrack {
-    RobotCoordinate coordinate;
-    std::chrono::steady_clock::time_point last_seen_timestamp;
-    int match_counter = 0;
-    bool confirmed = false;
-    bool notified = false;
-};
-
 void update_existing_detections(const std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point>& incoming_detections, std::vector<BatteryTrack>& existing_detections, std::chrono::steady_clock::time_point& tracks_timestamp){
     auto detection_timestamp = incoming_detections.second;
 
