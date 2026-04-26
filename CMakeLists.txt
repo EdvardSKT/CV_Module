@@ -23,3 +23,18 @@ target_link_libraries(cv_module PRIVATE
     ${CMAKE_SOURCE_DIR}/include/libYMConnect.so
 )
 target_compile_definitions(cv_module PRIVATE CV_MODULE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_executable(fake_robot_demo
+    src/fake_robot_main.cpp
+    src/threads/mock_computer_vision_thread.cpp
+    src/threads/queue_thread.cpp
+    src/threads/robot_thread.cpp
+    src/utilities/coordinate_converter.cpp
+    src/utilities/image_processing.cpp
+)
+
+target_include_directories(fake_robot_demo PRIVATE include)
+target_link_libraries(fake_robot_demo PRIVATE
+    ${OpenCV_LIBS}
+    ${CMAKE_SOURCE_DIR}/include/libYMConnect.so
+)

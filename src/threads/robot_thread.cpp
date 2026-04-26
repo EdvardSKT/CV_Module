@@ -1,81 +1,241 @@
 #include "threads/robot_thread.hpp"
-#include "threads/queue_thread.hpp"
 
-#include "utilities/BoundedChannel.hpp"
-#include "utilities/image_processing.hpp"
-#include "vendor/YMConnect.h"
-
-#include <atomic>
 #include <iostream>
 #include <thread>
-#include <chrono>
+#include <utility>
 
 namespace {
 
 const UINT32 CONVEYOR_USER_COORDINATE_NUMBER = 1;
 const UINT16 BATTERY_OFFSET_VARIABLE_NUMBER = 0;
 
-const UINT32 PICK_FINISHED_ADDRESS = 10010; // TODO: Define real address
-const UINT32 READY_FOR_OFFSET_ADDRESS = 10011; // TODO: Define real address
+StatusInfo ok_status()
+{
+    return StatusInfo{};
+}
 
 RobotPositionVariableData generate_robot_position_variable(const BatteryTrack& active_target)
 {
-    DOUBLE64 crossTrack_offset = active_target.coordinate.y;
+    const DOUBLE64 cross_track_offset = active_target.coordinate.y;
 
-    RobotPositionVariableData robotPositionVariableData{};
+    RobotPositionVariableData robot_position_variable_data{};
     CoordinateArray battery_offset{};
 
     battery_offset.at(AxisIndex::CartesianAxis::X) = 0;
-    battery_offset.at(AxisIndex::CartesianAxis::Y) = crossTrack_offset;
+    battery_offset.at(AxisIndex::CartesianAxis::Y) = cross_track_offset;
     battery_offset.at(AxisIndex::CartesianAxis::Z) = 0;
     battery_offset.at(AxisIndex::CartesianAxis::Rx) = 0;
     battery_offset.at(AxisIndex::CartesianAxis::Ry) = 0;
     battery_offset.at(AxisIndex::CartesianAxis::Rz) = 0;
 
-    robotPositionVariableData.variableIndex = BATTERY_OFFSET_VARIABLE_NUMBER;
-    robotPositionVariableData.positionData.coordinateType = CoordinateType::UserCoordinate;
-    robotPositionVariableData.positionData.userCoordinateNumber = CONVEYOR_USER_COORDINATE_NUMBER;
-    robotPositionVariableData.positionData.axisData = battery_offset;
+    robot_position_variable_data.variableIndex = BATTERY_OFFSET_VARIABLE_NUMBER;
+    robot_position_variable_data.positionData.coordinateType = CoordinateType::UserCoordinate;
+    robot_position_variable_data.positionData.userCoordinateNumber = CONVEYOR_USER_COORDINATE_NUMBER;
+    robot_position_variable_data.positionData.axisData = battery_offset;
 
-    return robotPositionVariableData;
+    return robot_position_variable_data;
 }
 
+class YmConnectRobotController final : public RobotController {
+public:
+    explicit YmConnectRobotController(MotomanController* controller)
+        : controller_(controller)
+    {
+    }
+
+    ~YmConnectRobotController() override
+    {
+        if (controller_ != nullptr) {
+            YMConnect::CloseConnection(controller_);
+        }
+    }
+
+    bool is_connected() const override
+    {
+        return controller_ != nullptr;
+    }
+
+    StatusInfo read_bit(UINT32 address, bool& value) override
+    {
+        if (controller_ == nullptr || controller_->Io == nullptr) {
+            return StatusInfo{-1, "YMConnect controller is not connected"};
+        }
+
+        return controller_->Io->ReadBit(address, value);
+    }
+
+    StatusInfo write_position_variable(const RobotPositionVariableData& value) override
+    {
+        if (controller_ == nullptr || controller_->Variables == nullptr || controller_->Variables->RobotPositionVariable == nullptr) {
+            return StatusInfo{-1, "YMConnect robot position variable interface is unavailable"};
+        }
+
+        return controller_->Variables->RobotPositionVariable->Write(value);
+    }
+
+private:
+    MotomanController* controller_{nullptr};
+};
+
+void log_status_if_error(const char* action, const StatusInfo& status)
+{
+    if (!status.IsOk()) {
+        std::cerr << action << " failed: " << status << std::endl;
+    }
 }
 
+}  // namespace
 
+FakeRobotController::FakeRobotController(std::chrono::milliseconds pick_cycle_time)
+    : pick_cycle_time_(pick_cycle_time)
+{
+}
 
-void robot_loop(BoundedChannel<BatteryTrack>& active_target_ch, std::atomic<bool>& running) {
+bool FakeRobotController::is_connected() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return connected_;
+}
+
+StatusInfo FakeRobotController::read_bit(UINT32 address, bool& value)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!connected_) {
+        return StatusInfo{-1, "Fake robot controller is disconnected"};
+    }
+
+    constexpr UINT32 pick_finished_address = 10010;
+    constexpr UINT32 ready_for_offset_address = 10011;
+
+    if (address == ready_for_offset_address) {
+        value = ready_for_offset_;
+        return ok_status();
+    }
+
+    if (address == pick_finished_address) {
+        if (!pick_finished_ && pick_finished_at_ != std::chrono::steady_clock::time_point{} &&
+            std::chrono::steady_clock::now() >= pick_finished_at_) {
+            pick_finished_ = true;
+            ready_for_offset_ = true;
+        }
+
+        value = pick_finished_;
+        return ok_status();
+    }
+
+    return StatusInfo{-2, "Unsupported fake IO address"};
+}
+
+StatusInfo FakeRobotController::write_position_variable(const RobotPositionVariableData& value)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!connected_) {
+        return StatusInfo{-1, "Fake robot controller is disconnected"};
+    }
+
+    written_positions_.push_back(value);
+    ready_for_offset_ = false;
+    pick_finished_ = false;
+    pick_finished_at_ = std::chrono::steady_clock::now() + pick_cycle_time_;
+
+    const auto& axis_data = value.positionData.axisData;
+    std::cout << "[fake_robot] received offset write: variable=" << value.variableIndex
+              << " x=" << axis_data.at(AxisIndex::CartesianAxis::X)
+              << " y=" << axis_data.at(AxisIndex::CartesianAxis::Y)
+              << " z=" << axis_data.at(AxisIndex::CartesianAxis::Z) << std::endl;
+
+    return ok_status();
+}
+
+void FakeRobotController::set_ready_for_offset(bool ready)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    ready_for_offset_ = ready;
+}
+
+std::vector<RobotPositionVariableData> FakeRobotController::written_positions() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return written_positions_;
+}
+
+std::unique_ptr<RobotController> make_ymconnect_robot_controller(
+    const std::string& controller_ip,
+    StatusInfo& status
+)
+{
+    auto* controller = YMConnect::OpenConnection(controller_ip, status);
+    return std::make_unique<YmConnectRobotController>(controller);
+}
+
+void robot_loop(
+    BoundedChannel<BatteryTrack>& active_target_ch,
+    std::atomic<bool>& running
+)
+{
+    RobotLoopConfig config{};
     StatusInfo status{};
-    bool ready_for_offset{false};
-    bool pick_finished{false};
-    auto c = YMConnect::OpenConnection("192.168.1.31", status);
+    auto controller = make_ymconnect_robot_controller(config.controller_ip, status);
+
+    if (!status.IsOk() || !controller->is_connected()) {
+        std::cerr << "Failed to connect to robot controller at " << config.controller_ip
+                  << ": " << status << std::endl;
+        running = false;
+        return;
+    }
+
+    robot_loop(active_target_ch, running, *controller, config);
+}
+
+void robot_loop(
+    BoundedChannel<BatteryTrack>& active_target_ch,
+    std::atomic<bool>& running,
+    RobotController& controller,
+    const RobotLoopConfig& config
+)
+{
+    bool ready_for_offset = false;
+    bool pick_finished = false;
 
     while (running) {
         auto incoming = active_target_ch.recv();
-        if(!incoming){
+        if (!incoming) {
             std::cout << "nothing on the channel" << std::endl;
             break;
         }
 
         BatteryTrack active_target = *incoming;
-        RobotPositionVariableData battery_offset = generate_robot_position_variable(active_target);
+        const RobotPositionVariableData battery_offset = generate_robot_position_variable(active_target);
 
-        while(!ready_for_offset){
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            status = c->Io->ReadBit(READY_FOR_OFFSET_ADDRESS, ready_for_offset);
+        while (running && !ready_for_offset) {
+            std::this_thread::sleep_for(config.ready_poll_interval);
+            const StatusInfo status = controller.read_bit(config.ready_for_offset_address, ready_for_offset);
+            log_status_if_error("Read READY_FOR_OFFSET", status);
+            if (!status.IsOk()) {
+                running = false;
+                return;
+            }
         }
         ready_for_offset = false;
 
-        status = c->Variables->RobotPositionVariable->Write(battery_offset);
+        const StatusInfo write_status = controller.write_position_variable(battery_offset);
+        std::cout << write_status << std::endl;
+        if (!write_status.IsOk()) {
+            running = false;
+            return;
+        }
 
-        std::cout << status << std::endl;
-
-        while(!pick_finished){
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            status = c->Io->ReadBit(PICK_FINISHED_ADDRESS, pick_finished);
+        while (running && !pick_finished) {
+            std::this_thread::sleep_for(config.pick_finished_poll_interval);
+            const StatusInfo status = controller.read_bit(config.pick_finished_address, pick_finished);
+            log_status_if_error("Read PICK_FINISHED", status);
+            if (!status.IsOk()) {
+                running = false;
+                return;
+            }
         }
         pick_finished = false;
     }
-
-    YMConnect::CloseConnection(c);
-};
+}

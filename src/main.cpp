@@ -83,7 +83,13 @@ int main(int argc, char* argv[]) {
         std::ref(running),
         std::ref(ch)
     );
-    std::thread queue_thread(queue_loop, std::ref(running), std::ref(ch), std::ref(fd));
+    std::thread queue_thread(
+        queue_loop,
+        std::ref(running),
+        std::ref(ch),
+        std::ref(fd),
+        nullptr
+    );
 
     while (running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(25));

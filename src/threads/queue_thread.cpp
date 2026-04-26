@@ -107,7 +107,12 @@ void update_existing_detections(const std::pair<std::vector<RobotCoordinate>, st
 
 }
 
-void queue_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch, int& fd)
+void queue_loop(
+    std::atomic<bool>& running,
+    BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch,
+    int& fd,
+    BoundedChannel<BatteryTrack>* active_target_ch
+)
 {
     std::vector<BatteryTrack> existing_detections;
     std::chrono::steady_clock::time_point tracks_timestamp;
@@ -121,7 +126,7 @@ void queue_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector
         std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point> incoming_detections_camera_frame = std::move(incoming.value());
         std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point> incoming_detections = {convert_multiple(incoming_detections_camera_frame.first), incoming_detections_camera_frame.second};
 
-        if (LOG_TRACKING) {
+        if (!LOG_TRACKING) {
             std::cout << "Queue frame: " << incoming_detections.first.size()
                       << " detection(s)";
             for (size_t i = 0; i < incoming_detections.first.size(); ++i) {
@@ -170,6 +175,17 @@ void queue_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector
                     std::cout << "0x" << std::hex << static_cast<int>(byte) << " ";
                 }
                 std::cout << std::dec << "\n";
+
+                if (active_target_ch != nullptr) {
+                    BatteryTrack active_target = det;
+                    active_target.is_active_target = true;
+                    if (!active_target_ch->send(std::move(active_target))) {
+                        std::cerr << "Failed to forward active target to robot thread\n";
+                        running = false;
+                        break;
+                    }
+                }
+
                 det.notified = true;
             }
         }
