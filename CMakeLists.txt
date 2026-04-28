@@ -10,6 +10,7 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui videoio dnn calib3d
 add_executable(cv_module
     src/main.cpp
     src/threads/computer_vision_thread.cpp
+    src/threads/video_file_computer_vision_thread.cpp
     src/threads/mock_computer_vision_thread.cpp
     src/threads/queue_thread.cpp
     src/utilities/coordinate_converter.cpp
@@ -23,6 +24,7 @@ target_compile_definitions(cv_module PRIVATE CV_MODULE_SOURCE_DIR="${CMAKE_SOURC
 add_executable(real_robot_main
     src/real_robot_main.cpp
     src/threads/computer_vision_thread.cpp
+    src/threads/video_file_computer_vision_thread.cpp
     src/threads/queue_thread.cpp
     src/threads/robot_thread.cpp
     src/utilities/coordinate_converter.cpp
@@ -50,3 +52,12 @@ target_link_libraries(fake_robot_demo PRIVATE
     ${OpenCV_LIBS}
     ${CMAKE_SOURCE_DIR}/include/libYMConnect.so
 )
+
+add_executable(cuda_video_test
+    src/cuda_video_test_main.cpp
+    src/utilities/image_processing.cpp
+)
+
+target_include_directories(cuda_video_test PRIVATE include)
+target_link_libraries(cuda_video_test PRIVATE ${OpenCV_LIBS})
+target_compile_definitions(cuda_video_test PRIVATE CV_MODULE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
