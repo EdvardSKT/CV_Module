@@ -7,6 +7,7 @@
 #include <chrono>
 #include <filesystem>
 #include <iostream>
+#include <mutex>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -38,7 +39,11 @@ std::filesystem::path resolve_model_path() {
 
 }  // namespace
 
-void cv_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch){
+void cv_loop(
+    std::atomic<bool>& running,
+    BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch,
+    SharedFrame* shared_frame
+){
 
     // Open camera feed
     cv::VideoCapture camera_feed(0);
@@ -94,7 +99,15 @@ void cv_loop(std::atomic<bool>& running, BoundedChannel<std::pair<std::vector<De
         }
 
         // Extract detections
-        const auto current_detections = postprocess_detection_centers(out, prep, frame.size());
+        const auto detections = decode_detections(out, prep, frame.size());
+        const auto current_detections = detection_centers_from_detections(detections);
+
+        if (shared_frame != nullptr) {
+            std::lock_guard<std::mutex> lock(shared_frame->mutex);
+            frame.copyTo(shared_frame->frame);
+            shared_frame->detections = detections;
+            ++shared_frame->frame_id;
+        }
 
         // Send detections on channel 
         if (!ch.send(std::make_pair(current_detections, timestamp))) {

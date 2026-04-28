@@ -29,6 +29,8 @@ PreprocessResult preprocessYOLO(const cv::Mat& image, int input_w = 1280, int in
 
 std::vector<Detection> decode_detections(const cv::Mat& output, const PreprocessResult& prep, const cv::Size& image_size);
 
+std::vector<DetectionCenter> detection_centers_from_detections(const std::vector<Detection>& detections);
+
 std::vector<DetectionCenter> postprocess_detection_centers(
     const cv::Mat& output,
     const PreprocessResult& prep,

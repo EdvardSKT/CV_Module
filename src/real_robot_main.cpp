@@ -1,7 +1,6 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
-#include <cstring>
 #include <fcntl.h>
 #include <iostream>
 #include <mutex>
@@ -12,8 +11,8 @@
 #include <vector>
 
 #include "threads/computer_vision_thread.hpp"
-#include "threads/mock_computer_vision_thread.hpp"
 #include "threads/queue_thread.hpp"
+#include "threads/robot_thread.hpp"
 #include "utilities/BoundedChannel.hpp"
 #include "utilities/image_processing.hpp"
 #include "utilities/shared_types.hpp"
@@ -24,26 +23,21 @@ namespace {
 
 std::atomic<bool> running{true};
 
-void signal_handler(int) {
+void signal_handler(int)
+{
     running = false;
 }
 
 }  // namespace
 
-int main(int argc, char* argv[]) {
-    BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>> ch(10);
-
-    bool use_mock_detector = false;
-    for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--mock-detector") == 0) {
-            use_mock_detector = true;
-        }
-    }
-
-    std::signal(SIGINT, signal_handler);
+int main()
+{
+    BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>> detection_ch(10);
+    BoundedChannel<BatteryTrack> active_target_ch(10);
     SharedFrame display_frame;
 
-    // Open serial communication
+    std::signal(SIGINT, signal_handler);
+
     const char* port = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0";
 
     int fd = open(port, O_RDWR | O_NOCTTY | O_SYNC);
@@ -52,7 +46,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Configure serial
     struct termios tty{};
     tcgetattr(fd, &tty);
 
@@ -82,19 +75,19 @@ int main(int argc, char* argv[]) {
     std::cout << "Waiting for controller serial boot/reset...\n";
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    std::thread computer_vision_thread;
-    if (use_mock_detector) {
-        computer_vision_thread = std::thread(mock_cv_loop, std::ref(running), std::ref(ch));
-    } else {
-        computer_vision_thread = std::thread(cv_loop, std::ref(running), std::ref(ch), &display_frame);
-    }
+    auto real_robot_loop = static_cast<void (*)(
+        BoundedChannel<BatteryTrack>&,
+        std::atomic<bool>&)>(robot_loop);
+
+    std::thread detector_thread(cv_loop, std::ref(running), std::ref(detection_ch), &display_frame);
     std::thread queue_thread(
         queue_loop,
         std::ref(running),
-        std::ref(ch),
+        std::ref(detection_ch),
         std::ref(fd),
-        nullptr
+        &active_target_ch
     );
+    std::thread robot_thread(real_robot_loop, std::ref(active_target_ch), std::ref(running));
 
     uint64_t last_displayed_frame_id = 0;
     bool display_window_created = false;
@@ -125,9 +118,14 @@ int main(int argc, char* argv[]) {
     if (display_window_created) {
         cv::destroyWindow("Computer Vision");
     }
-    ch.close();
-    computer_vision_thread.join();
+
+    detection_ch.close();
+    active_target_ch.close();
+
+    detector_thread.join();
     queue_thread.join();
+    robot_thread.join();
+
     close(fd);
 
     return 0;
