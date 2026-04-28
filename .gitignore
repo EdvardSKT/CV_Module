@@ -49,6 +49,7 @@
 
 # CMake
 build/
+build-cuda/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
