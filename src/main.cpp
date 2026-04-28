@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
+#include <mutex>
 #include <termios.h>
 #include <thread>
 #include <unistd.h>
@@ -15,7 +16,9 @@
 #include "threads/queue_thread.hpp"
 #include "utilities/BoundedChannel.hpp"
 #include "utilities/image_processing.hpp"
+#include "utilities/shared_types.hpp"
 
+#include <opencv2/highgui.hpp>
 
 namespace {
 
@@ -38,9 +41,10 @@ int main(int argc, char* argv[]) {
     }
 
     std::signal(SIGINT, signal_handler);
+    SharedFrame display_frame;
 
     // Open serial communication
-    const char* port = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0";
+    const char* port = "/dev/cu.usbserial-210";
 
     int fd = open(port, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0) {
@@ -78,11 +82,12 @@ int main(int argc, char* argv[]) {
     std::cout << "Waiting for controller serial boot/reset...\n";
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    std::thread computer_vision_thread(
-        use_mock_detector ? mock_cv_loop : cv_loop,
-        std::ref(running),
-        std::ref(ch)
-    );
+    std::thread computer_vision_thread;
+    if (use_mock_detector) {
+        computer_vision_thread = std::thread(mock_cv_loop, std::ref(running), std::ref(ch));
+    } else {
+        computer_vision_thread = std::thread(cv_loop, std::ref(running), std::ref(ch), &display_frame);
+    }
     std::thread queue_thread(
         queue_loop,
         std::ref(running),
@@ -91,10 +96,35 @@ int main(int argc, char* argv[]) {
         nullptr
     );
 
+    uint64_t last_displayed_frame_id = 0;
+    bool display_window_created = false;
     while (running) {
+        cv::Mat frame;
+        std::vector<Detection> detections;
+        {
+            std::lock_guard<std::mutex> lock(display_frame.mutex);
+            if (display_frame.frame_id != last_displayed_frame_id) {
+                display_frame.frame.copyTo(frame);
+                detections = display_frame.detections;
+                last_displayed_frame_id = display_frame.frame_id;
+            }
+        }
+
+        if (!frame.empty()) {
+            draw_detections(frame, detections);
+            cv::imshow("Computer Vision", frame);
+            display_window_created = true;
+            if (cv::waitKey(1) == 27) {
+                running = false;
+            }
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(25));
     }
 
+    if (display_window_created) {
+        cv::destroyWindow("Computer Vision");
+    }
     ch.close();
     computer_vision_thread.join();
     queue_thread.join();

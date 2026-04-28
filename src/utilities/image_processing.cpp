@@ -177,13 +177,7 @@ std::vector<Detection> decode_detections(const cv::Mat& output, const Preprocess
     return detections;
 }
 
-std::vector<DetectionCenter> postprocess_detection_centers(
-    const cv::Mat& output,
-    const PreprocessResult& prep,
-    const cv::Size& image_size
-) {
-    const auto detections = decode_detections(output, prep, image_size);
-
+std::vector<DetectionCenter> detection_centers_from_detections(const std::vector<Detection>& detections) {
     std::vector<DetectionCenter> centers;
     centers.reserve(detections.size());
 
@@ -202,6 +196,14 @@ std::vector<DetectionCenter> postprocess_detection_centers(
     }
 
     return centers;
+}
+
+std::vector<DetectionCenter> postprocess_detection_centers(
+    const cv::Mat& output,
+    const PreprocessResult& prep,
+    const cv::Size& image_size
+) {
+    return detection_centers_from_detections(decode_detections(output, prep, image_size));
 }
 
 void draw_detections(cv::Mat& image, const std::vector<Detection>& detections) {

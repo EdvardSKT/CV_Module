@@ -23,9 +23,9 @@
 namespace
 {
 
-const float CONVEYOR_SPEED = 0.3;
-const float Y_DISTANCE_THRESHOLD = 0.001; // TODO: FIND REALISTIC VALUE
-const float X_TRAVEL_UNCERTAINTY = 0.001; // TODO: FIND REALISTIC VALUE
+const float CONVEYOR_SPEED = 0.1;
+const float Y_DISTANCE_THRESHOLD = 0.01; // TODO: FIND REALISTIC VALUE
+const float X_TRAVEL_UNCERTAINTY = 0.01; // TODO: FIND REALISTIC VALUE
 const float HOME_X_POSITION = 3.0;
 const float END_X_POSITION = 3.5;
 
@@ -126,7 +126,7 @@ void queue_loop(
         std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point> incoming_detections_camera_frame = std::move(incoming.value());
         std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point> incoming_detections = {convert_multiple(incoming_detections_camera_frame.first), incoming_detections_camera_frame.second};
 
-        if (!LOG_TRACKING) {
+        if (LOG_TRACKING) {
             std::cout << "Queue frame: " << incoming_detections.first.size()
                       << " detection(s)";
             for (size_t i = 0; i < incoming_detections.first.size(); ++i) {

@@ -55,8 +55,8 @@ RobotCoordinate convert(const DetectionCenter& detection, const ConverterConfig&
 {
     return convert(
         cv::Point2d{
-            static_cast<double>(detection.center.x),
-            static_cast<double>(detection.center.y)
+            static_cast<double>(detection.center.y),
+            static_cast<double>(detection.center.x)
         },
         config
     );
