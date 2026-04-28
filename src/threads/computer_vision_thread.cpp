@@ -14,6 +14,7 @@
 
 #include <opencv2/dnn.hpp>
 #include <opencv2/opencv.hpp>
+#include <opencv2/core/cuda.hpp>
 
 namespace {
 
@@ -66,8 +67,22 @@ void cv_loop(
         return;
     }
 
-    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+    // Set backend and target
+    try {
+        if (cv::cuda::getCudaEnabledDeviceCount() > 0) {
+            net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+            net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+            std::cout << "Using CUDA for OpenCV DNN\n";
+        } else {
+            net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+            net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+            std::cout << "CUDA unavailable, using CPU\n";
+        }
+    } catch (const cv::Exception& e) {
+        net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+        net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+    }
+
 
     cv::Mat frame;
     while (running && camera_feed.read(frame)) {
