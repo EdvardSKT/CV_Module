@@ -13,7 +13,7 @@
 int main()
 {
     BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>> detection_ch(10);
-    BoundedChannel<BatteryTrack> active_target_ch(10);
+    BoundedChannel<double> battery_y_offset_ch(10);
     std::atomic<bool> running{true};
 
     const char* port = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0";
@@ -56,7 +56,7 @@ int main()
     FakeRobotController fake_robot;
 
     auto robot_loop_with_controller = static_cast<void (*)(
-        BoundedChannel<BatteryTrack>&,
+        BoundedChannel<double>&,
         std::atomic<bool>&,
         RobotController&,
         const RobotLoopConfig&)>(robot_loop);
@@ -67,11 +67,11 @@ int main()
         std::ref(running),
         std::ref(detection_ch),
         std::ref(fd),
-        &active_target_ch
+        &battery_y_offset_ch
     );
     std::thread robot_thread(
         robot_loop_with_controller,
-        std::ref(active_target_ch),
+        std::ref(battery_y_offset_ch),
         std::ref(running),
         std::ref(fake_robot),
         RobotLoopConfig{}
@@ -82,7 +82,7 @@ int main()
     }
 
     detection_ch.close();
-    active_target_ch.close();
+    battery_y_offset_ch.close();
 
     detector_thread.join();
     queue_thread.join();

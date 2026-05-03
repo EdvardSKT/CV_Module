@@ -33,7 +33,7 @@ void signal_handler(int)
 int main()
 {
     BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>> detection_ch(10);
-    BoundedChannel<BatteryTrack> active_target_ch(10);
+    BoundedChannel<double> battery_y_offset_ch(10);
     SharedFrame display_frame;
 
     std::signal(SIGINT, signal_handler);
@@ -76,7 +76,7 @@ int main()
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
     auto real_robot_loop = static_cast<void (*)(
-        BoundedChannel<BatteryTrack>&,
+        BoundedChannel<double>&,
         std::atomic<bool>&)>(robot_loop);
 
     std::thread detector_thread(cv_loop, std::ref(running), std::ref(detection_ch), &display_frame);
@@ -85,9 +85,9 @@ int main()
         std::ref(running),
         std::ref(detection_ch),
         std::ref(fd),
-        &active_target_ch
+        &battery_y_offset_ch
     );
-    std::thread robot_thread(real_robot_loop, std::ref(active_target_ch), std::ref(running));
+    std::thread robot_thread(real_robot_loop, std::ref(battery_y_offset_ch), std::ref(running));
 
     uint64_t last_displayed_frame_id = 0;
     bool display_window_created = false;
@@ -120,7 +120,7 @@ int main()
     }
 
     detection_ch.close();
-    active_target_ch.close();
+    battery_y_offset_ch.close();
 
     detector_thread.join();
     queue_thread.join();

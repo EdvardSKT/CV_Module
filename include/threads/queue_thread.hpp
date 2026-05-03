@@ -22,5 +22,5 @@ void queue_loop(
     std::atomic<bool>& running,
     BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch,
     int& fd,
-    BoundedChannel<BatteryTrack>* active_target_ch = nullptr
+    BoundedChannel<double>* battery_y_offset_ch = nullptr
 );

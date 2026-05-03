@@ -55,12 +55,12 @@ std::unique_ptr<RobotController> make_ymconnect_robot_controller(
 );
 
 void robot_loop(
-    BoundedChannel<BatteryTrack>& active_target_ch,
+    BoundedChannel<double>& battery_y_offset_ch,
     std::atomic<bool>& running
 );
 
 void robot_loop(
-    BoundedChannel<BatteryTrack>& active_target_ch,
+    BoundedChannel<double>& battery_y_offset_ch,
     std::atomic<bool>& running,
     RobotController& controller,
     const RobotLoopConfig& config = {}

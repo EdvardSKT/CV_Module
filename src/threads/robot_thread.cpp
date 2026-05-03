@@ -14,9 +14,9 @@ StatusInfo ok_status()
     return StatusInfo{};
 }
 
-RobotPositionVariableData generate_robot_position_variable(const BatteryTrack& active_target)
+RobotPositionVariableData generate_robot_position_variable(const double& battery_y_offset)
 {
-    const DOUBLE64 cross_track_offset = active_target.coordinate.y;
+    const DOUBLE64 cross_track_offset = battery_y_offset;
 
     RobotPositionVariableData robot_position_variable_data{};
     CoordinateArray battery_offset{};
@@ -171,7 +171,7 @@ std::unique_ptr<RobotController> make_ymconnect_robot_controller(
 }
 
 void robot_loop(
-    BoundedChannel<BatteryTrack>& active_target_ch,
+    BoundedChannel<double>& battery_y_offset_ch,
     std::atomic<bool>& running
 )
 {
@@ -186,11 +186,11 @@ void robot_loop(
         return;
     }
 
-    robot_loop(active_target_ch, running, *controller, config);
+    robot_loop(battery_y_offset_ch, running, *controller, config);
 }
 
 void robot_loop(
-    BoundedChannel<BatteryTrack>& active_target_ch,
+    BoundedChannel<double>& battery_y_offset_ch,
     std::atomic<bool>& running,
     RobotController& controller,
     const RobotLoopConfig& config
@@ -200,14 +200,14 @@ void robot_loop(
     bool pick_finished = false;
 
     while (running) {
-        auto incoming = active_target_ch.recv();
+        auto incoming = battery_y_offset_ch.recv();
         if (!incoming) {
             std::cout << "nothing on the channel" << std::endl;
             break;
         }
 
-        BatteryTrack active_target = *incoming;
-        const RobotPositionVariableData battery_offset = generate_robot_position_variable(active_target);
+        double battery_y_offset = *incoming;
+        const RobotPositionVariableData battery_offset = generate_robot_position_variable(battery_y_offset);
 
         while (running && !ready_for_offset) {
             std::this_thread::sleep_for(config.ready_poll_interval);
