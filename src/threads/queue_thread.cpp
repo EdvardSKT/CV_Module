@@ -26,6 +26,7 @@ namespace
 const float CONVEYOR_SPEED = 0.3;
 const float Y_DISTANCE_THRESHOLD = 0.001; // TODO: FIND REALISTIC VALUE
 const float X_TRAVEL_UNCERTAINTY = 0.001; // TODO: FIND REALISTIC VALUE
+const float MAX_CONFIRM_X = 1.5;
 const float HOME_X_POSITION = 3.0;
 const float END_X_POSITION = 3.5;
 
@@ -63,7 +64,7 @@ void update_existing_detections(const std::pair<std::vector<RobotCoordinate>, st
 
                 exi_det.match_counter++;
 
-                if(!exi_det.confirmed && exi_det.match_counter == NEEDED_DETECTIONS_FOR_CONFIRMATION){
+                if(!exi_det.confirmed && exi_det.match_counter == NEEDED_DETECTIONS_FOR_CONFIRMATION && exi_det.coordinate.x < MAX_CONFIRM_X){
                     exi_det.confirmed = true;
                     if (LOG_TRACKING) {
                         std::cout << "Confirmed detection at x=" << exi_det.coordinate.x
