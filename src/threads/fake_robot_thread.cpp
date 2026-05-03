@@ -1,8 +1,7 @@
-#include "threads/robot_thread.hpp"
+#include "threads/fake_robot_thread.hpp"
 
 #include <iostream>
 #include <thread>
-#include <utility>
 
 namespace {
 
@@ -36,47 +35,6 @@ RobotPositionVariableData generate_robot_position_variable(const BatteryTrack& a
     return robot_position_variable_data;
 }
 
-class YmConnectRobotController final : public RobotController {
-public:
-    explicit YmConnectRobotController(MotomanController* controller)
-        : controller_(controller)
-    {
-    }
-
-    ~YmConnectRobotController() override
-    {
-        if (controller_ != nullptr) {
-            YMConnect::CloseConnection(controller_);
-        }
-    }
-
-    bool is_connected() const override
-    {
-        return controller_ != nullptr;
-    }
-
-    StatusInfo read_bit(UINT32 address, bool& value) override
-    {
-        if (controller_ == nullptr || controller_->Io == nullptr) {
-            return StatusInfo{-1, "YMConnect controller is not connected"};
-        }
-
-        return controller_->Io->ReadBit(address, value);
-    }
-
-    StatusInfo write_position_variable(const RobotPositionVariableData& value) override
-    {
-        if (controller_ == nullptr || controller_->Variables == nullptr || controller_->Variables->RobotPositionVariable == nullptr) {
-            return StatusInfo{-1, "YMConnect robot position variable interface is unavailable"};
-        }
-
-        return controller_->Variables->RobotPositionVariable->Write(value);
-    }
-
-private:
-    MotomanController* controller_{nullptr};
-};
-
 void log_status_if_error(const char* action, const StatusInfo& status)
 {
     if (!status.IsOk()) {
@@ -85,6 +43,21 @@ void log_status_if_error(const char* action, const StatusInfo& status)
 }
 
 }  // namespace
+
+bool StatusInfo::IsOk() const
+{
+    return code == 0;
+}
+
+std::ostream& operator<<(std::ostream& os, const StatusInfo& status)
+{
+    os << "StatusInfo{code=" << status.code;
+    if (!status.message.empty()) {
+        os << ", message=\"" << status.message << "\"";
+    }
+    os << "}";
+    return os;
+}
 
 FakeRobotController::FakeRobotController(std::chrono::milliseconds pick_cycle_time)
     : pick_cycle_time_(pick_cycle_time)
@@ -161,32 +134,13 @@ std::vector<RobotPositionVariableData> FakeRobotController::written_positions() 
     return written_positions_;
 }
 
-std::unique_ptr<RobotController> make_ymconnect_robot_controller(
-    const std::string& controller_ip,
-    StatusInfo& status
-)
-{
-    auto* controller = YMConnect::OpenConnection(controller_ip, status);
-    return std::make_unique<YmConnectRobotController>(controller);
-}
-
 void robot_loop(
     BoundedChannel<BatteryTrack>& active_target_ch,
     std::atomic<bool>& running
 )
 {
-    RobotLoopConfig config{};
-    StatusInfo status{};
-    auto controller = make_ymconnect_robot_controller(config.controller_ip, status);
-
-    if (!status.IsOk() || !controller->is_connected()) {
-        std::cerr << "Failed to connect to robot controller at " << config.controller_ip
-                  << ": " << status << std::endl;
-        running = false;
-        return;
-    }
-
-    robot_loop(active_target_ch, running, *controller, config);
+    FakeRobotController controller;
+    robot_loop(active_target_ch, running, controller, RobotLoopConfig{});
 }
 
 void robot_loop(

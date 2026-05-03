@@ -1,18 +1,59 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <chrono>
-#include <memory>
+#include <cstdint>
 #include <mutex>
+#include <ostream>
 #include <string>
 #include <vector>
 
 #include "threads/queue_thread.hpp"
 #include "utilities/BoundedChannel.hpp"
-#include "vendor/YMConnect.h"
+
+using UINT16 = std::uint16_t;
+using UINT32 = std::uint32_t;
+using DOUBLE64 = double;
+
+namespace AxisIndex {
+enum CartesianAxis {
+    X = 0,
+    Y,
+    Z,
+    Rx,
+    Ry,
+    Rz
+};
+}  // namespace AxisIndex
+
+using CoordinateArray = std::array<DOUBLE64, 6>;
+
+enum class CoordinateType {
+    UserCoordinate
+};
+
+struct StatusInfo {
+    int code = 0;
+    std::string message;
+
+    bool IsOk() const;
+};
+
+std::ostream& operator<<(std::ostream& os, const StatusInfo& status);
+
+struct PositionData {
+    CoordinateType coordinateType = CoordinateType::UserCoordinate;
+    UINT32 userCoordinateNumber = 0;
+    CoordinateArray axisData{};
+};
+
+struct RobotPositionVariableData {
+    PositionData positionData{};
+    UINT16 variableIndex = 0;
+};
 
 struct RobotLoopConfig {
-    std::string controller_ip = "192.168.1.31";
     UINT32 pick_finished_address = 10010;
     UINT32 ready_for_offset_address = 10011;
     std::chrono::milliseconds ready_poll_interval{10};
@@ -48,11 +89,6 @@ private:
     std::vector<RobotPositionVariableData> written_positions_;
     std::chrono::steady_clock::time_point pick_finished_at_{};
 };
-
-std::unique_ptr<RobotController> make_ymconnect_robot_controller(
-    const std::string& controller_ip,
-    StatusInfo& status
-);
 
 void robot_loop(
     BoundedChannel<BatteryTrack>& active_target_ch,
