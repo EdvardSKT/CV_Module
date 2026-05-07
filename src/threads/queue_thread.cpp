@@ -19,6 +19,7 @@
 #include <string>
 
 #include <opencv2/core/types.hpp>
+#include "raylib.h"
 
 namespace
 {
@@ -29,6 +30,13 @@ const float X_TRAVEL_UNCERTAINTY = 0.001; // TODO: FIND REALISTIC VALUE
 const float MAX_CONFIRM_X = 1.5;
 const float HOME_X_POSITION = 3.0;
 const float END_X_POSITION = 3.5;
+const float MAX_Y = 1.5;
+
+//FOR VIZUALIZATION
+const int pixels_per_m = 300;
+
+const double conveyor_length_pixels = END_X_POSITION*pixels_per_m;
+const double conveyor_width_pixels = MAX_Y*pixels_per_m;
 
 const int NEEDED_DETECTIONS_FOR_CONFIRMATION = 3;
 const bool LOG_TRACKING = true;
@@ -141,6 +149,19 @@ void queue_loop(
     std::vector<BatteryTrack> existing_detections;
     std::chrono::steady_clock::time_point tracks_timestamp;
 
+    // FOR VIZUALIZATION
+
+    InitWindow(1000, 400, "Conveyor Tracker View");
+    SetTargetFPS(60);
+
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+
+    DrawRectangle(50, 50, conveyor_length_pixels, conveyor_width_pixels, LIGHTGRAY);
+    DrawRectangleLines(50, 50, conveyor_length_pixels, conveyor_width_pixels, DARKGRAY);
+
+    //
+
     while (running) {
         auto incoming = ch.recv();
         if(!incoming){
@@ -217,5 +238,19 @@ void queue_loop(
             det.notified = true;
 
         }
+
+        // Visualize 
+
+        for(const auto& bat : existing_detections){
+            double x_percentage = bat.coordinate.x/END_X_POSITION;
+            double y_percentage = bat.coordinate.y/max_y;
+
+            int x_pixel = static_cast<int>(floor(x_percentage*conveyor_length_pixels)) + 50;
+            int y_pixels = static_cast<int>(floor(y_percentage*conveyor_width_pixels)) + 50;
+
+            DrawCircle(x_pixel, y_pixels, 10, RED);
+        }
+
+
     }
 };
