@@ -237,3 +237,142 @@ void draw_detections(cv::Mat& image, const std::vector<Detection>& detections) {
         );
     }
 }
+
+// HOMOGRAPHY CALIB
+
+struct CalibrationState
+{
+    cv::Mat image;
+    cv::Mat displayImage;
+
+    std::vector<cv::Point2f>* points;
+
+    int requiredPoints;
+};
+
+static void redraw(CalibrationState* state)
+{
+    state->displayImage = state->image.clone();
+
+    for (size_t i = 0; i < state->points->size(); ++i) {
+
+        cv::Point p(
+            (int)(*state->points)[i].x,
+            (int)(*state->points)[i].y
+        );
+
+        cv::circle(
+            state->displayImage,
+            p,
+            6,
+            cv::Scalar(0,0,255),
+            -1
+        );
+
+        cv::putText(
+            state->displayImage,
+            std::to_string(i),
+            p + cv::Point(10,-10),
+            cv::FONT_HERSHEY_SIMPLEX,
+            0.8,
+            cv::Scalar(0,0,255),
+            2
+        );
+    }
+
+    cv::imshow("Captured image", state->displayImage);
+}
+
+static void mouseCallback(
+    int event,
+    int x,
+    int y,
+    int,
+    void* userdata
+)
+{
+    auto* state = static_cast<CalibrationState*>(userdata);
+
+    if (event == cv::EVENT_LBUTTONDOWN) {
+
+        if ((int)state->points->size() < state->requiredPoints) {
+
+            state->points->emplace_back((float)x, (float)y);
+
+            std::cout << "Point "
+                      << state->points->size() - 1
+                      << ": "
+                      << x << " "
+                      << y
+                      << std::endl;
+
+            redraw(state);
+        }
+    }
+
+    if (event == cv::EVENT_RBUTTONDOWN) {
+
+        if (!state->points->empty()) {
+
+            state->points->pop_back();
+
+            redraw(state);
+        }
+    }
+}
+
+void get_calibration_points(
+    std::vector<cv::Point2f>& points,
+    int requiredPoints,
+    const std::string& device
+)
+{
+    points.clear();
+
+    cv::VideoCapture cap(device, cv::CAP_V4L2);
+
+    if (!cap.isOpened()) {
+        throw std::runtime_error("Could not open camera");
+    }
+
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
+
+    cv::Mat frame;
+
+    for (int i = 0; i < 20; ++i) {
+        cap >> frame;
+    }
+
+    if (frame.empty()) {
+        throw std::runtime_error("Could not capture frame");
+    }
+
+    CalibrationState state;
+
+    state.image = frame;
+    state.displayImage = frame.clone();
+    state.points = &points;
+    state.requiredPoints = requiredPoints;
+
+    cv::namedWindow("Captured image", cv::WINDOW_NORMAL);
+
+    cv::setMouseCallback(
+        "Captured image",
+        mouseCallback,
+        &state
+    );
+
+    redraw(&state);
+
+    while ((int)points.size() < requiredPoints) {
+
+        int key = cv::waitKey(20);
+
+        if (key == 27) {
+            break;
+        }
+    }
+
+    cv::destroyWindow("Captured image");
+}

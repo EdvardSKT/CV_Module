@@ -20,6 +20,8 @@ struct ConverterConfig {
     cv::Point2d origin_pixel{518.0, 128.0};
 };
 
+void vector_undistort_pixel_to_normalized(std::vector<cv::Point2f>& pixels);
+
 RobotCoordinate convert(const cv::Point2d& detection_pixel, const ConverterConfig& config = {});
 
 RobotCoordinate convert(const DetectionCenter& detection, const ConverterConfig& config = {});

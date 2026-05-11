@@ -38,3 +38,9 @@ std::vector<DetectionCenter> postprocess_detection_centers(
 );
 
 void draw_detections(cv::Mat& image, const std::vector<Detection>& detections);
+
+void get_calibration_points(
+    std::vector<cv::Point2f>& points,
+    int requiredPoints,
+    const std::string& device = "/dev/video0"
+);

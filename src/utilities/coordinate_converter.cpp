@@ -39,6 +39,20 @@ cv::Point2d undistort_pixel_to_normalized(const cv::Point2d& pixel)
 
 }  // namespace
 
+void vector_undistort_pixel_to_normalized(std::vector<cv::Point2f>& pixels)
+{
+    for (auto& p : pixels) {
+        const cv::Point2d undistorted =
+            undistort_pixel_to_normalized(cv::Point2d(p));
+
+        p = cv::Point2f(
+            static_cast<float>(undistorted.x),
+            static_cast<float>(undistorted.y)
+        );
+    }
+}
+
+
 RobotCoordinate convert(const cv::Point2d& detection_pixel, const ConverterConfig& config)
 {
     const cv::Point2d origin_u = undistort_pixel_to_normalized(config.origin_pixel);
