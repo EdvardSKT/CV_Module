@@ -61,3 +61,12 @@ add_executable(cuda_video_test
 target_include_directories(cuda_video_test PRIVATE include)
 target_link_libraries(cuda_video_test PRIVATE ${OpenCV_LIBS})
 target_compile_definitions(cuda_video_test PRIVATE CV_MODULE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_executable(calibrate_homography
+    src/utilities/calibrate_homography.cpp
+    src/utilities/image_processing.cpp
+    src/utilities/coordinate_converter.cpp
+)
+
+target_include_directories(calibrate_homography PRIVATE include)
+target_link_libraries(calibrate_homography PRIVATE ${OpenCV_LIBS})

@@ -150,7 +150,7 @@ void queue_loop(
         std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point> incoming_detections_camera_frame = std::move(incoming.value());
         std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point> incoming_detections = {convert_multiple(incoming_detections_camera_frame.first), incoming_detections_camera_frame.second};
 
-        if (!LOG_TRACKING) {
+        if (LOG_TRACKING) {
             std::cout << "Queue frame: " << incoming_detections.first.size()
                       << " detection(s)";
             for (size_t i = 0; i < incoming_detections.first.size(); ++i) {
