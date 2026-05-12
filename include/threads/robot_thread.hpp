@@ -60,8 +60,18 @@ void robot_loop(
 );
 
 void robot_loop(
-    BoundedChannel<double>& battery_y_offset_ch,
+    BoundedChannel<RobotCoordinate>& position_ch,
+    std::atomic<bool>& running
+);
+
+void robot_loop(
+    BoundedChannel<RobotCoordinate>& position_ch,
     std::atomic<bool>& running,
     RobotController& controller,
     const RobotLoopConfig& config = {}
+);
+
+void robot_loop_2(
+    BoundedChannel<RobotCoordinate>& position_ch,
+    std::atomic<bool>& running
 );

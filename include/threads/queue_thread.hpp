@@ -24,3 +24,9 @@ void queue_loop(
     int& fd,
     BoundedChannel<double>* battery_y_offset_ch = nullptr
 );
+
+void stationary_batteries_queue_loop(
+    std::atomic<bool>& running,
+    BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch,
+    BoundedChannel<RobotCoordinate>* position_ch
+);

@@ -16,17 +16,17 @@ namespace
 {
 
 const std::vector<cv::Point2f> turntablePoints = {
-    cv::Point2f{1.014f, -0.172f},
-    cv::Point2f{0.852f, 0.014f},
-    cv::Point2f{1.035f, 0.179f},
-    cv::Point2f{1.200f, -0.006f},
-    cv::Point2f{1.065f, 0.002f},
-    cv::Point2f{1.024f, -0.036f}
+    cv::Point2f{1.0294f, -0.1723f},
+    cv::Point2f{0.8526f, 0.0009f},
+    cv::Point2f{1.0237f, 0.1791f},
+    cv::Point2f{1.2012f, -0.0065f},
+    cv::Point2f{1.0671f, 0.0047f},
+    cv::Point2f{0.9992f, -0.0238f}
 };
 
 void print_usage(const char* program)
 {
-    std::cout << "Usage: " << program << " [--camera /dev/video42] [--output calibration_points.yml]\n";
+    std::cout << "Usage: " << program << " [--camera /dev/video42] [--output homography_calibration.yml]\n";
 }
 
 }
@@ -34,7 +34,7 @@ void print_usage(const char* program)
 int main(int argc, char* argv[])
 {
     std::string camera_device = "/dev/video42";
-    std::string output_path = "calibration_points.yml";
+    std::string output_path = "homography_calibration.yml";
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--camera") == 0 && i + 1 < argc) {

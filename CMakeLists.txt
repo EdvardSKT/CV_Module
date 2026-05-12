@@ -70,3 +70,20 @@ add_executable(calibrate_homography
 
 target_include_directories(calibrate_homography PRIVATE include)
 target_link_libraries(calibrate_homography PRIVATE ${OpenCV_LIBS})
+
+add_executable(stationary_batteries_main
+    src/stationary_batteries_main.cpp
+    src/threads/computer_vision_thread.cpp
+    src/threads/video_file_computer_vision_thread.cpp
+    src/threads/queue_thread.cpp
+    src/threads/robot_thread.cpp
+    src/utilities/coordinate_converter.cpp
+    src/utilities/image_processing.cpp
+)
+
+target_include_directories(stationary_batteries_main PRIVATE include)
+target_link_libraries(stationary_batteries_main PRIVATE
+    ${OpenCV_LIBS}
+    ${CMAKE_SOURCE_DIR}/include/libYMConnect.so
+)
+target_compile_definitions(stationary_batteries_main PRIVATE CV_MODULE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

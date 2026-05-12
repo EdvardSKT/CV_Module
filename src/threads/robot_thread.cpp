@@ -1,4 +1,5 @@
 #include "threads/robot_thread.hpp"
+#include "vendor/YMConnect.h"
 
 #include <iostream>
 #include <thread>
@@ -8,6 +9,8 @@ namespace {
 
 const UINT32 CONVEYOR_USER_COORDINATE_NUMBER = 1;
 const UINT16 BATTERY_OFFSET_VARIABLE_NUMBER = 0;
+
+const DOUBLE64 X_OFFSET = 12;
 
 StatusInfo ok_status()
 {
@@ -31,6 +34,28 @@ RobotPositionVariableData generate_robot_position_variable(const double& battery
     robot_position_variable_data.variableIndex = BATTERY_OFFSET_VARIABLE_NUMBER;
     robot_position_variable_data.positionData.coordinateType = CoordinateType::UserCoordinate;
     robot_position_variable_data.positionData.userCoordinateNumber = CONVEYOR_USER_COORDINATE_NUMBER;
+    robot_position_variable_data.positionData.axisData = battery_offset;
+
+    return robot_position_variable_data;
+}
+
+RobotPositionVariableData generate_robot_position_variable(const RobotCoordinate& battery_position)
+{
+    const DOUBLE64 x = battery_position.x;
+    const DOUBLE64 y = battery_position.y;
+
+    RobotPositionVariableData robot_position_variable_data{};
+    CoordinateArray battery_offset{};
+
+    battery_offset.at(AxisIndex::CartesianAxis::X) = x*1000 + X_OFFSET;
+    battery_offset.at(AxisIndex::CartesianAxis::Y) = y*1000;
+    battery_offset.at(AxisIndex::CartesianAxis::Z) = 0;
+    battery_offset.at(AxisIndex::CartesianAxis::Rx) = 0;
+    battery_offset.at(AxisIndex::CartesianAxis::Ry) = 0;
+    battery_offset.at(AxisIndex::CartesianAxis::Rz) = 180;
+
+    robot_position_variable_data.variableIndex = BATTERY_OFFSET_VARIABLE_NUMBER;
+    robot_position_variable_data.positionData.coordinateType = CoordinateType::BaseCoordinate;
     robot_position_variable_data.positionData.axisData = battery_offset;
 
     return robot_position_variable_data;
@@ -171,7 +196,7 @@ std::unique_ptr<RobotController> make_ymconnect_robot_controller(
 }
 
 void robot_loop(
-    BoundedChannel<double>& battery_y_offset_ch,
+    BoundedChannel<RobotCoordinate>& position_ch,
     std::atomic<bool>& running
 )
 {
@@ -186,11 +211,11 @@ void robot_loop(
         return;
     }
 
-    robot_loop(battery_y_offset_ch, running, *controller, config);
+    robot_loop(position_ch, running, *controller, config);
 }
 
 void robot_loop(
-    BoundedChannel<double>& battery_y_offset_ch,
+    BoundedChannel<RobotCoordinate>& position_ch,
     std::atomic<bool>& running,
     RobotController& controller,
     const RobotLoopConfig& config
@@ -200,14 +225,14 @@ void robot_loop(
     bool pick_finished = false;
 
     while (running) {
-        auto incoming = battery_y_offset_ch.recv();
+        auto incoming = position_ch.recv();
         if (!incoming) {
             std::cout << "nothing on the channel" << std::endl;
             break;
         }
 
-        double battery_y_offset = *incoming;
-        const RobotPositionVariableData battery_offset = generate_robot_position_variable(battery_y_offset);
+        RobotCoordinate battery_position = *incoming;
+        const RobotPositionVariableData battery_offset = generate_robot_position_variable(battery_position);
 
         while (running && !ready_for_offset) {
             std::this_thread::sleep_for(config.ready_poll_interval);
@@ -238,4 +263,75 @@ void robot_loop(
         }
         pick_finished = false;
     }
+}
+
+// STATIONARY BATTERIES
+
+
+void robot_loop_2(
+    BoundedChannel<RobotCoordinate>& position_ch,
+    std::atomic<bool>& running
+)
+{
+    StatusInfo status;
+    MotomanController* c = YMConnect::OpenConnection("192.168.1.20", status); // Open a connection to the robot controller
+
+    UINT32 write_addr = 10011;
+    UINT32 read_addr = 10010;
+
+    if (status.StatusCode != 0)
+    {
+        std::cout << status << std::endl;
+        return;
+    }
+
+    while(running){
+
+        auto incoming = position_ch.recv();
+        if (!incoming) {
+            std::cout << "nothing on the channel" << std::endl;
+            break;
+        }
+
+        RobotCoordinate battery_position = *incoming;
+        if(battery_position.x > 0.84 && battery_position.x < 1.24 && battery_position.y > -0.2 && battery_position.y < 0.2)
+        {
+            const RobotPositionVariableData pos = generate_robot_position_variable(battery_position);
+
+            bool robot_ready = false;
+            status = c->Io->ReadBit(read_addr, robot_ready);
+            while(running && !robot_ready){
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                std::cout << "robot not ready" << std::endl;
+                status = c->Io->ReadBit(read_addr, robot_ready);
+            }
+            robot_ready = false;
+
+            status = c->Variables->RobotPositionVariable->Write(pos);
+            while(running && status.StatusCode != 0){
+                std::cout << "Could not write position variable: " << status << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                status = c->Variables->RobotPositionVariable->Write(pos);
+            }
+            std::cout << "Wrote position variable to robot." << std::endl;
+    
+            status = c->Io->WriteBit(write_addr, 1); // IF THIS FAILS THE PROGRAM JUST CONTINUES... NOT GOOD
+            while(running && status.StatusCode != 0){
+                std::cout << "Could not write bit: " << status << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                status = c->Io->WriteBit(write_addr, 1);
+            }
+            std::cout << "Wrote position ready bit to robot." << std::endl;
+            
+            bool robot_has_not_read = true;
+            status = c->Io->ReadBit(10011, robot_has_not_read);
+            while(running && robot_has_not_read){
+                std::cout << "Robot has read: " << status << std::endl;
+                status = c->Io->ReadBit(10011, robot_has_not_read);
+            }
+        }
+    }
+
+    YMConnect::CloseConnection(c);
+    return;
 }

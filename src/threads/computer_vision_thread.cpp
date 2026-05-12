@@ -47,7 +47,7 @@ void cv_loop(
 ){
 
     // Open camera feed
-    cv::VideoCapture camera_feed(0);
+    cv::VideoCapture camera_feed("/dev/video42", cv::CAP_V4L2);
 
     if (!camera_feed.isOpened()) {
         std::cerr << "Could not open camera\n";

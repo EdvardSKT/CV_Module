@@ -19,19 +19,20 @@
 #include <string>
 
 #include <opencv2/core/types.hpp>
+#include <opencv2/core/persistence.hpp>
 
 namespace
 {
 
-const float CONVEYOR_SPEED = 0.3;
-const float Y_DISTANCE_THRESHOLD = 0.001; // TODO: FIND REALISTIC VALUE
-const float X_TRAVEL_UNCERTAINTY = 0.001; // TODO: FIND REALISTIC VALUE
+const float CONVEYOR_SPEED = 0.0;
+const float Y_DISTANCE_THRESHOLD = 0.01; // TODO: FIND REALISTIC VALUE
+const float X_TRAVEL_UNCERTAINTY = 0.01; // TODO: FIND REALISTIC VALUE
 const float MAX_CONFIRM_X = 1.5;
 const float HOME_X_POSITION = 3.0;
 const float END_X_POSITION = 3.5;
 
 const int NEEDED_DETECTIONS_FOR_CONFIRMATION = 3;
-const bool LOG_TRACKING = true;
+const bool LOG_TRACKING = false;
 
 void update_existing_detections(const std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point>& incoming_detections, std::vector<BatteryTrack>& existing_detections, std::chrono::steady_clock::time_point& tracks_timestamp)
 {
@@ -219,3 +220,71 @@ void queue_loop(
         }
     }
 };
+
+
+
+
+// STATIONARY BATTERIES QUEUE LOOP
+
+
+
+
+void stationary_batteries_queue_loop(
+    std::atomic<bool>& running,
+    BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>>& ch,
+    BoundedChannel<RobotCoordinate>* position_ch
+)
+{
+    std::vector<BatteryTrack> existing_detections;
+    std::chrono::steady_clock::time_point tracks_timestamp;
+
+    cv::Mat H;
+
+    cv::FileStorage fs("homography_calibration.yml", cv::FileStorage::READ);
+    if (!fs.isOpened()) {
+        std::cerr << "Could not open homography_calibration.yml\n";
+        return;
+    }
+
+    fs["homography"] >> H;
+
+    fs.release();
+
+    while (running) {
+        auto incoming = ch.recv();
+        if(!incoming){
+            break;
+        }
+
+        std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point> incoming_detections_camera_frame = std::move(incoming.value());
+        std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point> incoming_detections = {convert_multiple_with_homography(incoming_detections_camera_frame.first, H), incoming_detections_camera_frame.second};
+
+        if (LOG_TRACKING) {
+            std::cout << "Queue frame: " << incoming_detections.first.size()
+                      << " detection(s)";
+            for (size_t i = 0; i < incoming_detections.first.size(); ++i) {
+                const auto& coordinate = incoming_detections.first.at(i);
+                std::cout << " | d" << i
+                          << " x=" << coordinate.x
+                          << ", y=" << coordinate.y;
+            }
+            std::cout << "\n";
+        }
+
+        // Match, confirm or delete detections
+        update_existing_detections(incoming_detections, existing_detections, tracks_timestamp);
+
+        for(auto& det : existing_detections) {
+
+            if (position_ch != nullptr & !det.notified) {
+                if (!position_ch->send(det.coordinate)) {
+                    std::cerr << "Failed to forward active target to robot thread\n";
+                    continue;
+                }
+            }
+
+            det.notified = true;
+
+        }
+    }
+}
