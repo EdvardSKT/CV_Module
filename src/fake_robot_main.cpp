@@ -16,7 +16,7 @@ int main()
     BoundedChannel<double> battery_y_offset_ch(10);
     std::atomic<bool> running{true};
 
-    const char* port = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0";
+    const char* port = "/dev/ttyUSB0";
 
     int fd = open(port, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0) {
