@@ -304,7 +304,7 @@ void robot_loop_2(
         RobotCoordinate battery_position = *incoming;
         std::cout << "Received battery position on channel: " << battery_position.x << " , " << battery_position.y << std::endl;
 
-        if(battery_position.x > 0.84 && battery_position.x < 1.24 && battery_position.y > -0.2 && battery_position.y < 0.2)
+        if(battery_position.x > 0.84 && battery_position.x < 1.13 && battery_position.y > -0.2 && battery_position.y < 0.2)
         {
             const RobotPositionVariableData pos = generate_robot_position_variable(battery_position);
 
