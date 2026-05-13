@@ -73,5 +73,6 @@ void robot_loop(
 
 void robot_loop_2(
     BoundedChannel<RobotCoordinate>& position_ch,
-    std::atomic<bool>& running
+    std::atomic<bool>& running,
+    const std::string& pick_time_csv_path = "robot_pick_times.csv"
 );

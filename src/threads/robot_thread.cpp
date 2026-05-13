@@ -2,6 +2,7 @@
 #include "vendor/YMConnect.h"
 
 #include <iostream>
+#include <fstream>
 #include <thread>
 #include <utility>
 #include <map>
@@ -278,7 +279,8 @@ void robot_loop(
 
 void robot_loop_2(
     BoundedChannel<RobotCoordinate>& position_ch,
-    std::atomic<bool>& running
+    std::atomic<bool>& running,
+    const std::string& pick_time_csv_path
 )
 {
     StatusInfo status;
@@ -286,6 +288,7 @@ void robot_loop_2(
 
     UINT32 write_addr = 10011;
     UINT32 read_addr = 10010;
+    std::ofstream pick_time_csv(pick_time_csv_path, std::ios::app);
 
     if (status.StatusCode != 0)
     {
@@ -304,7 +307,7 @@ void robot_loop_2(
         RobotCoordinate battery_position = *incoming;
         std::cout << "Received battery position on channel: " << battery_position.x << " , " << battery_position.y << std::endl;
 
-        if(battery_position.x > 0.84 && battery_position.x < 1.24 && battery_position.y > -0.2 && battery_position.y < 0.2)
+        if(battery_position.x > 0.84 && battery_position.x < 1.13 && battery_position.y > -0.2 && battery_position.y < 0.2)
         {
             const RobotPositionVariableData pos = generate_robot_position_variable(battery_position);
 
@@ -315,6 +318,7 @@ void robot_loop_2(
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 status = c->Io->ReadBit(read_addr, robot_ready);
             }
+            const auto pick_start = std::chrono::steady_clock::now();
             robot_ready = false;
 
             status = c->Variables->RobotPositionVariable->Write(pos);
@@ -340,6 +344,8 @@ void robot_loop_2(
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 status = c->Io->ReadBit(10011, robot_is_picking);
             }
+            const auto pick_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - pick_start).count();
+            pick_time_csv << battery_position.battery_type << ',' << pick_ms << '\n';
         } else {
             std::cout << "Coordinate out of reach, skipping..." << std::endl;
         }

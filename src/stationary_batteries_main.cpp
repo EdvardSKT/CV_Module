@@ -38,9 +38,9 @@ void signal_handler(int)
 std::filesystem::path make_default_recording_path()
 {
     const auto now = std::chrono::system_clock::now();
-    const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
     return std::filesystem::path(kDefaultRecordingDirectory) /
-           (std::string(kDefaultRecordingPrefix) + "_" + std::to_string(milliseconds) + ".avi");
+           (std::string(kDefaultRecordingPrefix) + "_" + std::to_string(seconds) + ".avi");
 }
 
 std::filesystem::path make_unique_recording_path(const std::filesystem::path& requested_path)
@@ -86,6 +86,20 @@ int main(int argc, char* argv[])
         }
     }
 
+    recording_path = make_unique_recording_path(recording_path);
+    const std::filesystem::path pick_time_csv_path =
+        recording_path.parent_path() / (recording_path.stem().string() + "_pick_times.csv");
+
+    std::error_code create_directory_error;
+    const std::filesystem::path recording_directory = recording_path.parent_path();
+    if (!recording_directory.empty()) {
+        std::filesystem::create_directories(recording_directory, create_directory_error);
+        if (create_directory_error) {
+            std::cerr << "Failed to create recording directory " << recording_directory
+                      << ": " << create_directory_error.message() << "\n";
+        }
+    }
+
     BoundedChannel<std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point>> detection_ch(10);
     BoundedChannel<RobotCoordinate> position_ch(10);
     SharedFrame display_frame;
@@ -99,7 +113,7 @@ int main(int argc, char* argv[])
         std::ref(detection_ch),
         &position_ch
     );
-    std::thread robot_thread(robot_loop_2, std::ref(position_ch), std::ref(running));
+    std::thread robot_thread(robot_loop_2, std::ref(position_ch), std::ref(running), pick_time_csv_path.string());
 
     uint64_t last_displayed_frame_id = 0;
     bool display_window_created = false;
@@ -121,19 +135,11 @@ int main(int argc, char* argv[])
             draw_detections(frame, detections);
 
             if (!recording_disabled && !detection_video.isOpened()) {
-                std::error_code create_directory_error;
-                const std::filesystem::path recording_directory = recording_path.parent_path();
-                if (!recording_directory.empty()) {
-                    std::filesystem::create_directories(recording_directory, create_directory_error);
-                    if (create_directory_error) {
-                        std::cerr << "Failed to create recording directory " << recording_directory
-                                  << ": " << create_directory_error.message() << "\n";
-                        recording_disabled = true;
-                    }
+                if (create_directory_error) {
+                    recording_disabled = true;
                 }
 
                 if (!recording_disabled) {
-                    recording_path = make_unique_recording_path(recording_path);
                     const int fourcc = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
                     detection_video.open(recording_path.string(), fourcc, recording_fps, frame.size(), frame.channels() == 3);
                     if (detection_video.isOpened()) {
