@@ -321,37 +321,22 @@ static void mouseCallback(
     }
 }
 
-void get_calibration_points(
+void get_calibration_points_from_image(
     std::vector<cv::Point2f>& points,
     int requiredPoints,
-    const std::string& device
+    const cv::Mat& image
 )
 {
     points.clear();
 
-    cv::VideoCapture cap(device, cv::CAP_V4L2);
-
-    if (!cap.isOpened()) {
-        throw std::runtime_error("Could not open camera");
-    }
-
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
-
-    cv::Mat frame;
-
-    for (int i = 0; i < 20; ++i) {
-        cap >> frame;
-    }
-
-    if (frame.empty()) {
-        throw std::runtime_error("Could not capture frame");
+    if (image.empty()) {
+        throw std::runtime_error("Calibration image is empty");
     }
 
     CalibrationState state;
 
-    state.image = frame;
-    state.displayImage = frame.clone();
+    state.image = image.clone();
+    state.displayImage = image.clone();
     state.points = &points;
     state.requiredPoints = requiredPoints;
 
@@ -375,4 +360,32 @@ void get_calibration_points(
     }
 
     cv::destroyWindow("Captured image");
+}
+
+void get_calibration_points(
+    std::vector<cv::Point2f>& points,
+    int requiredPoints,
+    const std::string& device
+)
+{
+    cv::VideoCapture cap(device, cv::CAP_V4L2);
+
+    if (!cap.isOpened()) {
+        throw std::runtime_error("Could not open camera");
+    }
+
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
+
+    cv::Mat frame;
+
+    for (int i = 0; i < 20; ++i) {
+        cap >> frame;
+    }
+
+    if (frame.empty()) {
+        throw std::runtime_error("Could not capture frame");
+    }
+
+    get_calibration_points_from_image(points, requiredPoints, frame);
 }

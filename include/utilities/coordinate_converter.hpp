@@ -21,6 +21,26 @@ struct ConverterConfig {
     cv::Point2d origin_pixel{518.0, 128.0};
 };
 
+enum class DistortionModel {
+    Fisheye,
+    BrownConrady,
+    RealSenseNative
+};
+
+struct CameraCalibration {
+    int width = 0;
+    int height = 0;
+    double fx = 874.62127813;
+    double fy = 877.90862779;
+    double cx = 951.80754784;
+    double cy = 544.96955520;
+    cv::Vec<double, 5> distortion{0.04717069, -0.04607454, 0.16142146, -0.11573583, 0.0};
+    DistortionModel distortion_model = DistortionModel::Fisheye;
+    int realsense_distortion_model = 0;
+};
+
+void set_camera_calibration(const CameraCalibration& calibration);
+
 void vector_undistort_pixel_to_normalized(std::vector<cv::Point2f>& pixels);
 
 RobotCoordinate convert(const cv::Point2d& detection_pixel, const ConverterConfig& config = {});

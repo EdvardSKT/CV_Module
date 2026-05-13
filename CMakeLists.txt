@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui videoio dnn calib3d)
+find_package(realsense2 REQUIRED)
 
 add_executable(cv_module
     src/main.cpp
@@ -18,7 +19,7 @@ add_executable(cv_module
 )
 
 target_include_directories(cv_module PRIVATE include)
-target_link_libraries(cv_module PRIVATE ${OpenCV_LIBS})
+target_link_libraries(cv_module PRIVATE ${OpenCV_LIBS} realsense2::realsense2)
 target_compile_definitions(cv_module PRIVATE CV_MODULE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_executable(real_robot_main
@@ -34,6 +35,7 @@ add_executable(real_robot_main
 target_include_directories(real_robot_main PRIVATE include)
 target_link_libraries(real_robot_main PRIVATE
     ${OpenCV_LIBS}
+    realsense2::realsense2
     ${CMAKE_SOURCE_DIR}/include/libYMConnect.so
 )
 target_compile_definitions(real_robot_main PRIVATE CV_MODULE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -50,6 +52,7 @@ add_executable(fake_robot_demo
 target_include_directories(fake_robot_demo PRIVATE include)
 target_link_libraries(fake_robot_demo PRIVATE
     ${OpenCV_LIBS}
+    realsense2::realsense2
     ${CMAKE_SOURCE_DIR}/include/libYMConnect.so
 )
 
@@ -69,7 +72,7 @@ add_executable(calibrate_homography
 )
 
 target_include_directories(calibrate_homography PRIVATE include)
-target_link_libraries(calibrate_homography PRIVATE ${OpenCV_LIBS})
+target_link_libraries(calibrate_homography PRIVATE ${OpenCV_LIBS} realsense2::realsense2)
 
 add_executable(stationary_batteries_main
     src/stationary_batteries_main.cpp
@@ -84,6 +87,7 @@ add_executable(stationary_batteries_main
 target_include_directories(stationary_batteries_main PRIVATE include)
 target_link_libraries(stationary_batteries_main PRIVATE
     ${OpenCV_LIBS}
+    realsense2::realsense2
     ${CMAKE_SOURCE_DIR}/include/libYMConnect.so
 )
 target_compile_definitions(stationary_batteries_main PRIVATE CV_MODULE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

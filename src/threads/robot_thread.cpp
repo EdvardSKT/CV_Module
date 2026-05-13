@@ -11,7 +11,7 @@ namespace {
 const UINT32 CONVEYOR_USER_COORDINATE_NUMBER = 1;
 const UINT16 BATTERY_OFFSET_VARIABLE_NUMBER = 0;
 
-const DOUBLE64 X_OFFSET = 8;
+const DOUBLE64 X_OFFSET = 0;
 
 const std::map<std::string, DOUBLE64> BATTERY_Z_OFFSETS_MM = {
     {"Alkalisk Ax2", -5.0},

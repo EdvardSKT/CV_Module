@@ -1,6 +1,7 @@
 #include "threads/computer_vision_thread.hpp"
 
 #include "utilities/BoundedChannel.hpp"
+#include "utilities/coordinate_converter.hpp"
 #include "utilities/image_processing.hpp"
 
 #include <atomic>
@@ -15,6 +16,8 @@
 #include <opencv2/dnn.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
+
+#include <librealsense2/rs.hpp>
 
 namespace {
 
@@ -38,6 +41,54 @@ std::filesystem::path resolve_model_path() {
     throw std::runtime_error("Could not find models/best.onnx from the current directory or project source directory");
 }
 
+void set_camera_calibration_from_realsense(const rs2_intrinsics& intrinsics)
+{
+    CameraCalibration calibration{};
+    calibration.width = intrinsics.width;
+    calibration.height = intrinsics.height;
+    calibration.fx = intrinsics.fx;
+    calibration.fy = intrinsics.fy;
+    calibration.cx = intrinsics.ppx;
+    calibration.cy = intrinsics.ppy;
+    calibration.distortion = {
+        intrinsics.coeffs[0],
+        intrinsics.coeffs[1],
+        intrinsics.coeffs[2],
+        intrinsics.coeffs[3],
+        intrinsics.coeffs[4]
+    };
+    calibration.distortion_model = DistortionModel::RealSenseNative;
+    calibration.realsense_distortion_model = static_cast<int>(intrinsics.model);
+
+    set_camera_calibration(calibration);
+
+    std::cout << "RealSense color intrinsics: "
+              << "width=" << intrinsics.width
+              << ", height=" << intrinsics.height
+              << ", fx=" << intrinsics.fx
+              << ", fy=" << intrinsics.fy
+              << ", ppx=" << intrinsics.ppx
+              << ", ppy=" << intrinsics.ppy
+              << ", distortion_model=" << intrinsics.model
+              << "\n";
+}
+
+rs2::pipeline_profile start_realsense_color_pipeline(rs2::pipeline& camera_pipeline)
+{
+    try {
+        rs2::config camera_config;
+        camera_config.enable_stream(RS2_STREAM_COLOR, 1280, 720, RS2_FORMAT_BGR8, 30);
+        return camera_pipeline.start(camera_config);
+    } catch (const rs2::error& e) {
+        std::cerr << "Could not start preferred RealSense color stream: " << e.what()
+                  << "\nFalling back to default BGR color stream\n";
+    }
+
+    rs2::config fallback_config;
+    fallback_config.enable_stream(RS2_STREAM_COLOR, RS2_FORMAT_BGR8);
+    return camera_pipeline.start(fallback_config);
+}
+
 }  // namespace
 
 void cv_loop(
@@ -46,11 +97,14 @@ void cv_loop(
     SharedFrame* shared_frame
 ){
 
-    // Open camera feed
-    cv::VideoCapture camera_feed("/dev/video42", cv::CAP_V4L2);
-
-    if (!camera_feed.isOpened()) {
-        std::cerr << "Could not open camera\n";
+    rs2::pipeline camera_pipeline;
+    try {
+        const rs2::pipeline_profile profile = start_realsense_color_pipeline(camera_pipeline);
+        const rs2::video_stream_profile color_profile =
+            profile.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
+        set_camera_calibration_from_realsense(color_profile.get_intrinsics());
+    } catch (const rs2::error& e) {
+        std::cerr << "Could not start RealSense camera: " << e.what() << "\n";
         running = false;
         return;
     }
@@ -83,9 +137,27 @@ void cv_loop(
         net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
     }
 
+    while (running) {
+        rs2::frameset frames;
+        try {
+            frames = camera_pipeline.wait_for_frames();
+        } catch (const rs2::error& e) {
+            std::cerr << "Failed to read RealSense frame: " << e.what() << "\n";
+            running = false;
+            return;
+        }
 
-    cv::Mat frame;
-    while (running && camera_feed.read(frame)) {
+        const rs2::video_frame color_frame = frames.get_color_frame();
+        if (!color_frame) {
+            continue;
+        }
+
+        cv::Mat frame(
+            cv::Size(color_frame.get_width(), color_frame.get_height()),
+            CV_8UC3,
+            const_cast<void*>(color_frame.get_data()),
+            cv::Mat::AUTO_STEP
+        );
 
         // Time of image
         auto timestamp = std::chrono::steady_clock::now();
