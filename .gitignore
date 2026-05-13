@@ -64,3 +64,7 @@ test_serial.py
 
 # Codex
 *.codex
+*.agent
+
+
+*.avi

@@ -119,7 +119,7 @@ RobotCoordinate convert_with_homography(const DetectionCenter& detection, const 
 
     cv::perspectiveTransform(undistorted, converted, H);
 
-    return RobotCoordinate{converted[0].x, converted[0].y};
+    return RobotCoordinate{converted[0].x, converted[0].y, detection.battery_type};
 }
 
 std::vector<RobotCoordinate> convert_multiple_with_homography(const std::vector<DetectionCenter>& detections, const cv::Mat& H)

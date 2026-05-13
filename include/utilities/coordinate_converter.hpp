@@ -9,6 +9,7 @@
 struct RobotCoordinate {
     double x;
     double y;
+    std::string battery_type = "";
 };
 
 struct ConverterConfig {

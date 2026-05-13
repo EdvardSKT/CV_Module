@@ -4,6 +4,7 @@
 #include <chrono>
 #include <utility>
 #include <vector>
+#include <string>
 
 #include "utilities/BoundedChannel.hpp"
 #include "utilities/coordinate_converter.hpp"
@@ -15,7 +16,7 @@ struct BatteryTrack {
     int match_counter = 0;
     bool confirmed = false;
     bool notified = false;
-    bool is_active_target = false;
+    std::string battery_type = "?";
 };
 
 void queue_loop(

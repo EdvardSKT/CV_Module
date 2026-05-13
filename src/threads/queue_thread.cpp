@@ -25,14 +25,14 @@ namespace
 {
 
 const float CONVEYOR_SPEED = 0.0;
-const float Y_DISTANCE_THRESHOLD = 0.01; // TODO: FIND REALISTIC VALUE
-const float X_TRAVEL_UNCERTAINTY = 0.01; // TODO: FIND REALISTIC VALUE
+const float Y_DISTANCE_THRESHOLD = 0.015; // TODO: FIND REALISTIC VALUE
+const float X_TRAVEL_UNCERTAINTY = 0.015; // TODO: FIND REALISTIC VALUE
 const float MAX_CONFIRM_X = 1.5;
 const float HOME_X_POSITION = 3.0;
 const float END_X_POSITION = 3.5;
 
-const int NEEDED_DETECTIONS_FOR_CONFIRMATION = 3;
-const bool LOG_TRACKING = false;
+const int NEEDED_DETECTIONS_FOR_CONFIRMATION = 7;
+const bool LOG_TRACKING = true;
 
 void update_existing_detections(const std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point>& incoming_detections, std::vector<BatteryTrack>& existing_detections, std::chrono::steady_clock::time_point& tracks_timestamp)
 {
@@ -61,10 +61,17 @@ void update_existing_detections(const std::pair<std::vector<RobotCoordinate>, st
             if(std::fabs(distance_y) <= Y_DISTANCE_THRESHOLD && std::fabs(distance_from_predicted_x) <= X_TRAVEL_UNCERTAINTY){
                 used.at(i) = true;
 
+                std::chrono::duration<double> time_since_last_seen = detection_timestamp - exi_det.last_seen_timestamp;
+                double time_since_last_seen_seconds = time_since_last_seen.count();
+
+                if(time_since_last_seen_seconds < 0.2){
+                    exi_det.match_counter++;
+                } else {
+                    exi_det.match_counter = 1;
+                }
+
                 exi_det.coordinate = inc_det;
                 exi_det.last_seen_timestamp = detection_timestamp;
-
-                exi_det.match_counter++;
 
                 if(!exi_det.confirmed && exi_det.match_counter == NEEDED_DETECTIONS_FOR_CONFIRMATION && exi_det.coordinate.x < MAX_CONFIRM_X){
                     exi_det.confirmed = true;
@@ -259,7 +266,7 @@ void stationary_batteries_queue_loop(
         std::pair<std::vector<DetectionCenter>, std::chrono::steady_clock::time_point> incoming_detections_camera_frame = std::move(incoming.value());
         std::pair<std::vector<RobotCoordinate>, std::chrono::steady_clock::time_point> incoming_detections = {convert_multiple_with_homography(incoming_detections_camera_frame.first, H), incoming_detections_camera_frame.second};
 
-        if (LOG_TRACKING) {
+        if (!LOG_TRACKING) {
             std::cout << "Queue frame: " << incoming_detections.first.size()
                       << " detection(s)";
             for (size_t i = 0; i < incoming_detections.first.size(); ++i) {
@@ -276,15 +283,13 @@ void stationary_batteries_queue_loop(
 
         for(auto& det : existing_detections) {
 
-            if (position_ch != nullptr & !det.notified) {
+            if (position_ch != nullptr & !det.notified && det.confirmed) {
                 if (!position_ch->send(det.coordinate)) {
                     std::cerr << "Failed to forward active target to robot thread\n";
                     continue;
                 }
-            }
-
-            det.notified = true;
-
+                det.notified = true;
+            }       
         }
     }
 }

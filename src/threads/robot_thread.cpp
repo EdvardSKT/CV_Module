@@ -4,13 +4,21 @@
 #include <iostream>
 #include <thread>
 #include <utility>
+#include <map>
 
 namespace {
 
 const UINT32 CONVEYOR_USER_COORDINATE_NUMBER = 1;
 const UINT16 BATTERY_OFFSET_VARIABLE_NUMBER = 0;
 
-const DOUBLE64 X_OFFSET = 12;
+const DOUBLE64 X_OFFSET = 8;
+
+const std::map<std::string, DOUBLE64> BATTERY_Z_OFFSETS_MM = {
+    {"Alkalisk Ax2", -5.0},
+    {"Alkalisk Ax3", 0.0},
+    {"Lithium knappecelle", -10.0},
+    {"Super Alkalisk",8.0}
+};
 
 StatusInfo ok_status()
 {
@@ -49,7 +57,7 @@ RobotPositionVariableData generate_robot_position_variable(const RobotCoordinate
 
     battery_offset.at(AxisIndex::CartesianAxis::X) = x*1000 + X_OFFSET;
     battery_offset.at(AxisIndex::CartesianAxis::Y) = y*1000;
-    battery_offset.at(AxisIndex::CartesianAxis::Z) = 0;
+    battery_offset.at(AxisIndex::CartesianAxis::Z) = BATTERY_Z_OFFSETS_MM.at(battery_position.battery_type);
     battery_offset.at(AxisIndex::CartesianAxis::Rx) = 0;
     battery_offset.at(AxisIndex::CartesianAxis::Ry) = 0;
     battery_offset.at(AxisIndex::CartesianAxis::Rz) = 180;
@@ -287,13 +295,15 @@ void robot_loop_2(
 
     while(running){
 
+        std::cout << "Reading from channel..." << std::endl;
         auto incoming = position_ch.recv();
         if (!incoming) {
             std::cout << "nothing on the channel" << std::endl;
             break;
         }
-
         RobotCoordinate battery_position = *incoming;
+        std::cout << "Received battery position on channel: " << battery_position.x << " , " << battery_position.y << std::endl;
+
         if(battery_position.x > 0.84 && battery_position.x < 1.24 && battery_position.y > -0.2 && battery_position.y < 0.2)
         {
             const RobotPositionVariableData pos = generate_robot_position_variable(battery_position);
@@ -301,8 +311,8 @@ void robot_loop_2(
             bool robot_ready = false;
             status = c->Io->ReadBit(read_addr, robot_ready);
             while(running && !robot_ready){
+                std::cout << "Robot not ready..." << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                std::cout << "robot not ready" << std::endl;
                 status = c->Io->ReadBit(read_addr, robot_ready);
             }
             robot_ready = false;
@@ -313,7 +323,7 @@ void robot_loop_2(
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 status = c->Variables->RobotPositionVariable->Write(pos);
             }
-            std::cout << "Wrote position variable to robot." << std::endl;
+            std::cout << "Wrote position variable to robot: " << battery_position.x << " , " << battery_position.y << std::endl;
     
             status = c->Io->WriteBit(write_addr, 1); // IF THIS FAILS THE PROGRAM JUST CONTINUES... NOT GOOD
             while(running && status.StatusCode != 0){
@@ -321,14 +331,17 @@ void robot_loop_2(
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 status = c->Io->WriteBit(write_addr, 1);
             }
-            std::cout << "Wrote position ready bit to robot." << std::endl;
+            std::cout << "Wrote 'position ready' bit to robot." << std::endl;
             
-            bool robot_has_not_read = true;
-            status = c->Io->ReadBit(10011, robot_has_not_read);
-            while(running && robot_has_not_read){
-                std::cout << "Robot has read: " << status << std::endl;
-                status = c->Io->ReadBit(10011, robot_has_not_read);
+            bool robot_is_picking = true;
+            std::cout << "Robot is picking..." << std::endl;
+            status = c->Io->ReadBit(10011, robot_is_picking);
+            while(running && robot_is_picking){
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                status = c->Io->ReadBit(10011, robot_is_picking);
             }
+        } else {
+            std::cout << "Coordinate out of reach, skipping..." << std::endl;
         }
     }
 
