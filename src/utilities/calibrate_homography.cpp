@@ -19,12 +19,20 @@ namespace
 {
 
 const std::vector<cv::Point2f> turntablePoints = {
-    cv::Point2f{1.0294f, -0.1723f},
-    cv::Point2f{0.8526f, 0.0009f},
-    cv::Point2f{1.0237f, 0.1791f},
-    cv::Point2f{1.2012f, -0.0065f},
-    cv::Point2f{1.0671f, 0.0047f},
-    cv::Point2f{0.9992f, -0.0238f}
+    cv::Point2f{1.0299f, -0.1712f},
+    cv::Point2f{1.0290f, -0.0967f},
+    cv::Point2f{0.8526f, 0.0015f},
+    cv::Point2f{0.9279f, 0.0019f},
+    cv::Point2f{1.0268f, 0.1043f},
+    cv::Point2f{1.0254f, 0.1788f},
+    cv::Point2f{1.2022f, 0.0067f},
+    cv::Point2f{1.1274f, 0.0056f},
+    cv::Point2f{1.0674f, 0.0042f},
+    cv::Point2f{0.9993f, -0.0247f},
+    cv::Point2f{0.9986f, 0.0322f},
+    cv::Point2f{0.8678f, -0.1468f},
+    cv::Point2f{0.9688f, 0.2187f},
+    cv::Point2f{1.1356f, -0.1421f},
 };
 
 void print_usage(const char* program)
