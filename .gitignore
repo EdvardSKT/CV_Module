@@ -64,3 +64,5 @@ test_serial.py
 
 # Codex
 *.codex
+
+*.zip
